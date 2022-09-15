@@ -90,12 +90,12 @@ class EndList(QFrame):
 
     # 添加
     def add(self, path, name, ico, size, send, cid=None):
-        quantity = len(self.allqtest)
-        progressbar = Qtest(path, name, ico, size, send, self.sidebar_1, self.network, cid=cid, parent=self.scrollcontents)
-        progressbar.setGeometry(0, quantity * 56, self.width() - 2, 56)
-        progressbar.show()
-        self.scrollcontents.setGeometry(0, 0, self.width() - 2, (quantity + 1) * 56)
-        self.allqtest.insert(0, progressbar)
+        qtext = Qtest(path, name, ico, size, send, self.sidebar_1, self.network, cid=cid, parent=self.scrollcontents)
+        qtext.show()
+        self.allqtest.insert(0, qtext)
+        for _qtext, index in zip(self.allqtest, range(len(self.allqtest))):
+            _qtext.setGeometry(0, index * 56, self.width() - 2, 56)
+        self.scrollcontents.setGeometry(0, 0, self.width() - 2, len(self.allqtest) * 56)
 
     def resizeEvent(self, event):
         self.scrollarea.resize(self.size())
