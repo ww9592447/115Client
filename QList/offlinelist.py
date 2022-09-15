@@ -22,6 +22,7 @@ class Qtext(QFrame):
         self.file_size.setStyleSheet('color:rgba(50, 50, 50, 150)')
         # 磁力hash
         self.ico = QFrame(self)
+        self.ico.setStyleSheet('background-color:rgb(255, 255, 255)')
 
         y = lambda height: int((56 - height) / 2)
         if data['status'] == 1:
@@ -57,8 +58,8 @@ class Qtext(QFrame):
         self.setStyleSheet('#_frame{border-style:solid;border-bottom-width:1;border-color: rgba(200, 200, 200, 125);'
                            'background-color: rgb(255, 255, 255)}')
 
-    def resizeEvent(self, e):
-        self.ico.setGeometry(self.width() - 240, 0, 360, 56)
+    def resizeEvent(self, event):
+        self.ico.setGeometry(self.width() - 240, 0, 360, 55)
 
 
 class Offlinelist(QFrame):
@@ -88,7 +89,7 @@ class Offlinelist(QFrame):
         
         MyQLabel('刷新', (10, 8, 111, 41), fontsize=16, clicked=lambda: create_task(self._refresh()), parent=self)
         MyQLabel('清空', (130, 8, 111, 41), fontsize=16, clicked=lambda: create_task(self.cls()), parent=self)
-    
+
     def add(self, data):
         quantity = len(self.allqtext)
         qtext = Qtext(data, self.end, self.open, parent=self.scrollcontents)
@@ -104,6 +105,8 @@ class Offlinelist(QFrame):
         create_task(self.network(cid, pages=True))
 
     def delete(self):
+        self.scrollcontents.setParent(None)
+        self.scrollcontents.deleteLater()
         self.scrollcontents = QFrame(self)
         self.scrollcontents.setGeometry(0, 0, self.width(), 0)
         self.scrollcontents.show()
@@ -119,8 +122,8 @@ class Offlinelist(QFrame):
 
     async def cls(self):
         self.gui.show()
-        await self.directory.offline_clearurl()
-        self.gui.hide()
+        await self.directory.offline_clear()
+        await self._refresh()
 
     async def _refresh(self):
         self.gui.show()
@@ -136,7 +139,7 @@ class Offlinelist(QFrame):
         QWidget.raise_(self)
         create_task(self._refresh())
 
-    def resizeEvent(self, e):
+    def resizeEvent(self, event):
         self.scrollcontents.setGeometry(0, 0, self.width(), self.scrollcontents.height())
         for qtext in self.allqtext:
             qtext.setGeometry(0, qtext.y(), self.width(), 56)

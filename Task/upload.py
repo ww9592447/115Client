@@ -62,7 +62,7 @@ class Upload:
                 i += 1
                 upload[str(i + 1)] = (i * 4194304, size - (i * 4194304))
         else:
-            return {0: (0, size)}
+            return {'1': (0, size)}
         return upload
 
     async def sha1_task(self, uuid):
@@ -93,8 +93,6 @@ class Upload:
         with self.lock:
             with set_state(self.state, uuid) as state:
                 state.update({'stop': False, 'state': _result})
-
-
 
     async def upload_task(self, uuid):
         result = await self.upload(uuid)
@@ -178,6 +176,13 @@ class Upload:
             with set_state(self.state, uuid) as state:
                 state.update({'stop': True})
 
+        if not state['range']:
+            result = await self.upload115.combine(
+                state[uuid]['etag'], state['url'],
+                state['upload_key'], state['upload_id'], state['cb']
+            )
+            return await self.detect_upload(result, state)
+
         callback = Callback()
         callback.all_size = state['size']
 
@@ -224,7 +229,6 @@ class Upload:
                     else:
                         return '上傳完成'
                 else:
-                    print(result)
                     return '秒傳出現錯誤3'
             elif result['statusmsg'] == '文件大小超出单文件上传最大限制，无法上传本文件。':
                 return '文件大小超出上傳限制'
@@ -258,6 +262,7 @@ class Upload:
                         with set_state(self.state, uuid) as state:
                             state['state'] = '獲取token失敗'
                     return '獲取token失敗'
+
             size = state['range'][_key]
             for i in range(5):
                 params = {'uploadId': state['upload_id'], 'partNumber': str(_key)}
@@ -289,6 +294,7 @@ class Upload:
                 except Exception as f:
                     if i == 4:
                         with self.lock:
+
                             with set_state(self.state, uuid) as state:
                                 state['state'] = '網路異常 上傳失敗'
                         return '網路異常 上傳失敗'

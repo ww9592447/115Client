@@ -60,7 +60,7 @@ class Qtest(QFrame):
         if exists(self.path):
             startfile(self.path)
 
-    def resizeEvent(self, e):
+    def resizeEvent(self, event):
         self.ico.move(self.width() - 293, 20)
         self.file_name.resize(self.width() - 350, 11)
         self.frame.setGeometry(0, self.height() - 1, self.width(), 1)
@@ -81,9 +81,8 @@ class EndList(QFrame):
             'border-left-width:1px; border-color:rgba(200, 200, 200, 125)}'
         )
 
-
         # 所有all_qtest
-        self.all_qtest = []
+        self.allqtest = []
         # 選擇首頁窗口
         self.sidebar_1 = sidebar_1
         # 前進cid
@@ -91,15 +90,15 @@ class EndList(QFrame):
 
     # 添加
     def add(self, path, name, ico, size, send, cid=None):
-        quantity = len(self.all_qtest)
+        quantity = len(self.allqtest)
         progressbar = Qtest(path, name, ico, size, send, self.sidebar_1, self.network, cid=cid, parent=self.scrollcontents)
         progressbar.setGeometry(0, quantity * 56, self.width() - 2, 56)
         progressbar.show()
         self.scrollcontents.setGeometry(0, 0, self.width() - 2, (quantity + 1) * 56)
-        self.all_qtest.append(progressbar)
+        self.allqtest.insert(0, progressbar)
 
-    def resizeEvent(self, e):
+    def resizeEvent(self, event):
         self.scrollarea.resize(self.size())
         self.scrollcontents.setGeometry(0, 0, self.width() - 2, self.scrollcontents.height())
-        for progressBar in self.all_qtest:
+        for progressBar in self.allqtest:
             progressBar.setGeometry(0, progressBar.y(), self.width() - 2, 56)
