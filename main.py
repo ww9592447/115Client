@@ -291,7 +291,6 @@ class Fake115GUI(Window):
                     self.uploadlist.sha1_add(state=state)
             remove('state.json')
 
-
     async def network(self, cid, index=0, action=None, pages=None):
         # 重新設定目前窗口 垂直滾動條歸0
         self.listdirectory.scrollarea.verticalcontents.setvalue(0)
@@ -362,8 +361,9 @@ class Fake115GUI(Window):
             if action and await action() is False:
                 result = False
             if result:
-                # 刪除舊的容器
-                self.listdirectory.delete_old_contents(cid)
+                if self.allpath[cid][index]['add']:
+                    # 刪除舊的容器
+                    self.listdirectory.delete_old_contents(cid)
                 del self.allpath[cid]
 
         if result:
@@ -371,10 +371,10 @@ class Fake115GUI(Window):
                     or not self.allpath[cid][index]['add']:
                 if cid not in self.allpath:
                     self.listdirectory.new_contents()
-                if cid[0:3] == '搜索-':
+                if cid in self.allpath and index in self.allpath[cid] and not self.allpath[cid][index]['add']:
+                    self.listdirectory.new_contents()
+                elif cid[0:3] == '搜索-':
                     await self.search(cid, index)
-                elif cid in self.allpath and index in self.allpath[cid] and not self.allpath[cid][index]['add']:
-                    pass
                 else:
                     # 刷新目錄
                     if await create_task(self.refresh(cid, index)) == '0':
@@ -818,7 +818,8 @@ class Fake115GUI(Window):
                     if cid in self.under_page_list:
                         self.under_page_list.remove(cid)
                     del self.allpath[cid]
-                    self.listdirectory.delete_contents(cid)
+                    if cid in self.listdirectory.save:
+                        self.listdirectory.delete_contents(cid)
         return result
 
     # 移動檔案
@@ -856,7 +857,7 @@ class Fake115GUI(Window):
     # 是否允許拖曳文件
     def dragEnterEvent(self, event):
         # 如果是在首頁則允許拖曳
-        if self.sidebar == 1 or self.sidebar == 3:
+        if (self.sidebar == 1 and  self.self_path_list[0:3] != '搜索-') or self.sidebar == 3:
             # 允許拖曳
             event.acceptProposedAction()
 
@@ -902,9 +903,9 @@ class Fake115GUI(Window):
 
     def closeEvent(self, event):
         if self.closes.value:
-            if self._state:
-                with open('state.json', 'w') as f:
-                    json.dump(dict(self._state), f)
+            # if self._state:
+            #     with open('state.json', 'w') as f:
+            #         json.dump(dict(self._state), f)
             event.accept()
         else:
             self.closes.value = 1

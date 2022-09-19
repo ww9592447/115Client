@@ -231,8 +231,8 @@ async def folderlist(text, buttonname, directory):
             self.listdirectory.rectangle_connect(lambda: create_task(self.reorganize()))
             # 設定搜索回調
             self.listdirectory.linedit_connect(self._search_callback)
-            self.listdirectory.set_search_all_callback(self._set_search_all_callback)
-            self.listdirectory.set_search_name_callback(self._set_search_name_callback)
+            self.listdirectory.set_search_all_connect(self._set_search_all_callback)
+            self.listdirectory.set_search_name_connect(self._set_search_name_callback)
 
             # 開始離線按鈕
             self.button = MyQLabel(
