@@ -1,5 +1,5 @@
 import time
-import srequests
+from module import  srequests
 from asyncio import sleep
 
 

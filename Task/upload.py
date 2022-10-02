@@ -21,11 +21,11 @@ class GetSha1(Thread):
         with open(self.path, 'rb') as f:
             sha = hashlib.sha1()
             sha.update(f.read(1024 * 128))
-            blockhash = sha.hexdigest()
+            blockhash = sha.hexdigest().upper()
             f.seek(0, 0)
             sha = hashlib.sha1()
             sha.update(f.read())
-            sha1 = sha.hexdigest()
+            sha1 = sha.hexdigest().upper()
         self.result = (blockhash, sha1)
 
     def get_result(self):
@@ -157,7 +157,13 @@ class Upload:
                 return '獲取token失敗'
         if not state['cb']:
             # 獲取上傳url
-            url = self.upload115.get_url(self.upload115.token['endpoint'], result['bucket'], result['object'])
+            try:
+                url = self.upload115.get_url(self.upload115.token['endpoint'], result['bucket'], result['object'])
+            except Exception as f:
+                print('------------')
+                print(f)
+                print(result)
+                raise f
             # 獲取上傳key名稱
             upload_key = result['object']
             # 獲取uploadid

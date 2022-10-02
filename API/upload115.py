@@ -18,7 +18,8 @@ class Upload115:
         # 新增資料夾 url
         self.directoryURL = 'https://webapi.115.com/files/add'
         # 秒傳 url
-        self.initURL = 'http://uplb.115.com/3.0/initupload.php?isp=0&appid=0&appversion=11.2.0&format=json&sig={}'
+        self.initURL = 'http://uplb.115.com/3.0/initupload.php?appid=0&appversion=2.0.1.7&format=json&isp=0&sig={}&t={}&topupload=0&rt=0&token={}'
+
         self.user_id = None
         self.userkey = None
         self.token = {}
@@ -30,7 +31,6 @@ class Upload115:
         }
         self.detect = {}
         self.thread = int(config['upload']['單文件上傳線程'])
-
 
     async def getuserkey(self):
         result = await srequests.async_get("http://proapi.115.com/app/uploadinfo", headers=self.headers)
@@ -56,23 +56,22 @@ class Upload115:
 
     # 使用sha1開始秒傳
     async def upload_file_by_sha1(self, preid, fileid, filesize, filename, cid):
-        fileid = fileid.upper()
-        quickid = fileid
-        target = f'U_1_{str(cid)}'
-        _hash = hashlib.sha1(f'{self.user_id}{fileid}{quickid}{target}0'.encode("utf-8")).hexdigest()
-        a = f'{self.userkey}{_hash}000000'
-        sig = hashlib.sha1(a.encode("utf-8")).hexdigest().upper()
-        url = self.initURL.format(sig)
+        target = f'U_1_{cid}'
+        tm = int(time.time())
+        s1 = hashlib.sha1(f'{self.user_id}{fileid}{target}0'.encode('utf8')).hexdigest()
+        s2 = self.userkey + s1 + "000000"
+        sig = hashlib.sha1(s2.encode('utf8')).hexdigest().upper()
+        h1 = hashlib.md5(self.user_id.encode('utf8')).hexdigest()
+        _token = f'Qclm8MGWUv59TnrR0XPg{fileid}{filesize}{preid}{self.user_id}{str(tm)}{h1}2.0.1.7'.encode('utf8')
+        token = hashlib.md5(_token).hexdigest()
+        url = self.initURL.format(sig, tm, token)
         data = {
-            'preid': preid,
+            'fileid': fileid,
             'filename': filename,
-            'quickid': fileid,
-            'app_ver': '11.2.0',
             'filesize': filesize,
-            'userid': self.user_id,
-            'exif': '',
+            'preid': preid,
             'target': target,
-            'fileid': fileid
+            'userid': self.user_id,
         }
         result = await srequests.async_post(url, data=data, headers=self.headers)
         if result is False:

@@ -1,6 +1,6 @@
 from module import QApplication, QWidget, split, set_event_loop, isfile, backdrop, MyQLabel, QFrame, Sidebar\
     , create_task, time, QLabel, picture, pybyte, MyIco, Window, sleep, splitext, srequests, getpath,\
-    isdir, walk, join, get_ico, QMetaMethod, remove, exists, ListDirectory, math, Path
+    isdir, walk, join, get_ico, QMetaMethod, remove, exists, ListDirectory, math, Path, set_state
 from multiprocessing import Process, Manager, Lock, Value, freeze_support
 from hints import error, myerror, myenter, offline, folderlist, sha1save, myfiledialog
 from configparser import ConfigParser
@@ -737,10 +737,6 @@ class Fake115GUI(Window):
             if len(self.allpath[cid]['folder']) == self.allpath[cid]['count']:
                 self.allpath[cid]['folder_read'] = True
             if self.allpath[cid]['_page'] == [] and not self.allpath[cid]['folder_read']:
-                page = math.ceil(self.allpath[cid]['count'] / self.listdirectory.pagemax)
-                print('-------------------')
-                print(cid, len(self.allpath[cid]['folder']), self.allpath[cid]['count'], index, page,
-                      self.allpath[cid]['path'])
                 self.allpath[cid]['folder_read'] = True
         return result
 
@@ -819,7 +815,7 @@ class Fake115GUI(Window):
                         self.under_page_list.remove(cid)
                     del self.allpath[cid]
                     if cid in self.listdirectory.save:
-                        self.listdirectory.delete_contents(cid)
+                        self.listdirectory.delete_old_contents(cid)
         return result
 
     # 移動檔案
@@ -903,9 +899,9 @@ class Fake115GUI(Window):
 
     def closeEvent(self, event):
         if self.closes.value:
-            # if self._state:
-            #     with open('state.json', 'w') as f:
-            #         json.dump(dict(self._state), f)
+            if self._state:
+                with open('state.json', 'w') as f:
+                    json.dump(dict(self._state), f)
             event.accept()
         else:
             self.closes.value = 1

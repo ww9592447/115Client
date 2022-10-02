@@ -232,7 +232,7 @@ class UploadList(MQList):
         )
         self._addtext(qtext, value)
 
-    # 新增空白資料夾
+    # 上傳空白資料夾
     async def new_folder_add(self, data=None, state=None):
         if value := data is not None:
             uuid = f'9{uuid1().hex}'
@@ -306,6 +306,12 @@ class UploadList(MQList):
                     task = None
         if qtext.uuid[0] == '9':
             self.end(qtext)
+        elif qtext.uuid[0] == '!':
+            with self.lock:
+                with set_state(self.state, qtext.uuid) as state:
+                    state.update({'cid': cid, 'dir': None})
+            qtext.task = create_task(qtext.set_state())
+
         else:
             with self.lock:
                 with set_state(self.state, qtext.uuid) as state:

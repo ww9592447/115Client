@@ -1,70 +1,190 @@
 import time
 import math
 import base64
-import srequests
+from module import srequests
 from urllib.parse import quote
 import json
-import c_rsa
 
-# os.environ["EXECJS_RUNTIME"] = "JScript"
+class MyRsa:
+    def __init__(self):
+        self.n = int(
+            '8686980c0f5a24c4b9d43020cd2c22703ff3f450756529058b1cf88f09b8602136477198a6e2683149659bd122c33592fdb5ad479'
+            '44ad1ea4d36c6b172aad6338c3bb6ac6227502d010993ac967d1aef00f0c8e038de2e4d3bc2ec368af2e9f10a6f1eda4f7262f136'
+            '420c07c331b871bf139f74f3010e3c4fe57df3afb71683',
+            16
+        )
+        self.e = int('10001', 16)
+
+    def a2hex(self, array):
+        hexstring = ''
+        for i in range(len(array)):
+            nexthexbyte = hex(array[i])[2:]
+            if len(nexthexbyte) < 2:
+                nexthexbyte = f'0{nexthexbyte}'
+            hexstring += nexthexbyte
+        return hexstring
+
+    def hex2a(self, _hex):
+        text = ''
+        for i in range(0, len(_hex), 2):
+            text += chr(int(_hex[i:i + 2], 16))
+        return text
+
+    def pkcs1pad2(self, s, n):
+        if n < len(s) + 11:
+            return
+        ba = {}
+        i = len(s) - 1
+        while i >= 0 and n > 0:
+            ba[(n := n - 1)] = ord(s[i])
+            i -= 1
+        ba[(n := n - 1)] = 0
+        while n > 2:
+            ba[(n := n - 1)] = 0xff
+        ba[(n := n - 1)] = 2
+        ba[(n := n - 1)] = 0
+        c = self.a2hex(ba)
+        return int(c, 16)
+
+    def pkcs1unpad2(self, a):
+        b = hex(a)[2:]
+        if len(b) % 2 != 0:
+            b = '0' + b
+        c = self.hex2a(b)
+        i = 1
+        while ord(c[i]) != 0:
+            i += 1
+        return c[i + 1:]
+
+    def encrypt(self, text):
+        m = self.pkcs1pad2(text, 0x80)
+        c = pow(m, self.e, self.n)
+        h = hex(c)[2:]
+        while len(h) < 0x80 * 2:
+            h = '0' + h
+        return h
+
+    def decrypt(self, text):
+        ba = {}
+        i = 0
+        while i < len(text):
+            ba[i] = ord(text[i])
+            i += 1
+        a = int(self.a2hex(ba), 16)
+        c = pow(a, self.e, self.n)
+        d = self.pkcs1unpad2(c)
+        return d
 
 
 class Download115:
     def __init__(self, config=None):
-        self.g_key_l = [0x42, 0xDA, 0x13, 0xBA, 0x78, 0x76, 0x8D, 0x37, 0xE8, 0xEE, 0x04, 0x91]
-        self.g_kts = [0xF0, 0xE5, 0x69, 0xAE, 0xBF, 0xDC, 0xBF, 0x5A, 0x1A, 0x45, 0xE8, 0xBE, 0x7D, 0xA6, 0x73, 0x88, 0xDE,
-                 0x8F, 0xE7, 0xC4, 0x45, 0xDA, 0x86, 0x94, 0x9B, 0x69, 0x92, 0x0B, 0x6A, 0xB8, 0xF1, 0x7A, 0x38, 0x06,
-                 0x3C, 0x95, 0x26, 0x6D, 0x2C, 0x56, 0x00, 0x70, 0x56, 0x9C, 0x36, 0x38, 0x62, 0x76, 0x2F, 0x9B, 0x5F,
-                 0x0F, 0xF2, 0xFE, 0xFD, 0x2D, 0x70, 0x9C, 0x86, 0x44, 0x8F, 0x3D, 0x14, 0x27, 0x71, 0x93, 0x8A, 0xE4,
-                 0x0E, 0xC1, 0x48, 0xAE, 0xDC, 0x34, 0x7F, 0xCF, 0xFE, 0xB2, 0x7F, 0xF6, 0x55, 0x9A, 0x46, 0xC8, 0xEB,
-                 0x37, 0x77, 0xA4, 0xE0, 0x6B, 0x72, 0x93, 0x7E, 0x51, 0xCB, 0xF1, 0x37, 0xEF, 0xAD, 0x2A, 0xDE, 0xEE,
-                 0xF9, 0xC9, 0x39, 0x6B, 0x32, 0xA1, 0xBA, 0x35, 0xB1, 0xB8, 0xBE, 0xDA, 0x78, 0x73, 0xF8, 0x20, 0xD5,
-                 0x27, 0x04, 0x5A, 0x6F, 0xFD, 0x5E, 0x72, 0x39, 0xCF, 0x3B, 0x9C, 0x2B, 0x57, 0x5C, 0xF9, 0x7C, 0x4B,
-                 0x7B, 0xD2, 0x12, 0x66, 0xCC, 0x77, 0x09, 0xA6]
-        self.g_key_s = [0x29, 0x23, 0x21, 0x5E]
 
-        self._prsa = "-----BEGIN RSA PUBLIC KEY-----\n\
-                MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDR3rWmeYnRClwLBB0Rq0dlm8Mr\n\
-                PmWpL5I23SzCFAoNpJX6Dn74dfb6y02YH15eO6XmeBHdc7ekEFJUIi+swganTokR\n\
-                IVRRr/z16/3oh7ya22dcAqg191y+d6YDr4IGg/Q5587UKJMj35yQVXaeFXmLlFPo\n\
-                kFiz4uPxhrB7BGqZbQIDAQAB\n\
-                -----END RSA PUBLIC KEY-----"
+        self.rsa = MyRsa()
+        self.kts = [240, 229, 105, 174, 191, 220, 191, 138, 26, 69, 232, 190, 125, 166, 115, 184, 222, 143, 231, 196,
+                    69, 218, 134, 196, 155, 100, 139, 20, 106, 180, 241, 170, 56, 1, 53, 158, 38, 105, 44, 134, 0, 107,
+                    79, 165, 54, 52, 98, 166, 42, 150, 104, 24, 242, 74, 253, 189, 107, 151, 143, 77, 143, 137, 19, 183,
+                    108, 142, 147, 237, 14, 13, 72, 62, 215, 47, 136, 216, 254, 254, 126, 134, 80, 149, 79, 209, 235,
+                    131, 38, 52, 219, 102, 123, 156, 126, 157, 122, 129, 50, 234, 182, 51, 222, 58, 169, 89, 52, 102,
+                    59, 170, 186, 129, 96, 72, 185, 213, 129, 156, 248, 108, 132, 119, 255, 84, 120, 38, 95, 190, 232,
+                    30, 54, 159, 52, 128, 92, 69, 44, 155, 118, 213, 27, 143, 204, 195, 184, 245]
 
-        self._srsa = "-----BEGIN RSA PRIVATE KEY-----\n\
-        MIICXAIBAAKBgQCMgUJLwWb0kYdW6feyLvqgNHmwgeYYlocst8UckQ1+waTOKHFC\n\
-        TVyRSb1eCKJZWaGa08mB5lEu/asruNo/HjFcKUvRF6n7nYzo5jO0li4IfGKdxso6\n\
-        FJIUtAke8rA2PLOubH7nAjd/BV7TzZP2w0IlanZVS76n8gNDe75l8tonQQIDAQAB\n\
-        AoGANwTasA2Awl5GT/t4WhbZX2iNClgjgRdYwWMI1aHbVfqADZZ6m0rt55qng63/\n\
-        3NsjVByAuNQ2kB8XKxzMoZCyJNvnd78YuW3Zowqs6HgDUHk6T5CmRad0fvaVYi6t\n\
-        viOkxtiPIuh4QrQ7NUhsLRtbH6d9s1KLCRDKhO23pGr9vtECQQDpjKYssF+kq9iy\n\
-        A9WvXRjbY9+ca27YfarD9WVzWS2rFg8MsCbvCo9ebXcmju44QhCghQFIVXuebQ7Q\n\
-        pydvqF0lAkEAmgLnib1XonYOxjVJM2jqy5zEGe6vzg8aSwKCYec14iiJKmEYcP4z\n\
-        DSRms43hnQsp8M2ynjnsYCjyiegg+AZ87QJANuwwmAnSNDOFfjeQpPDLy6wtBeft\n\
-        5VOIORUYiovKRZWmbGFwhn6BQL+VaafrNaezqUweBRi1PYiAF2l3yLZbUQJAf/nN\n\
-        4Hz/pzYmzLlWnGugP5WCtnHKkJWoKZBqO2RfOBCq+hY4sxvn3BHVbXqGcXLnZPvo\n\
-        YuaK7tTXxZSoYLEzeQJBAL8Mt3AkF1Gci5HOug6jT4s4Z+qDDrUXo9BlTwSWP90v\n\
-        wlHF+mkTJpKd5Wacef0vV+xumqNorvLpIXWKwxNaoHM=\n\
-        -----END RSA PRIVATE KEY-----"
-
-        # self.prsa = JSEncrypt()
-        # self.prsa.setPublicKey(self._prsa)
-        # self.srsa = JSEncrypt()
-        # self.srsa.setPrivateKey(self._srsa)
-
-        self.prsa_ = c_rsa.JSEncrypt()
-        self.prsa_.setPublicKey(self._prsa.encode())
-        self.srsa_ = c_rsa.JSEncrypt()
-        self.srsa_.setPrivateKey(self._srsa.encode())
-
-        # self.js = execjs.compile(open('rsa.js', encoding='utf-8').read())
-        # self.js = execjs.compile(_js)
+        self.keyS = [0x29, 0x23, 0x21, 0x5E]
+        self.keyL = [120, 6, 173, 76, 51, 134, 93, 24, 76, 1, 63, 70]
         if config:
             self.headers = {
                     'Content-Type': 'application/x-www-form-urlencoded',
                     'Cookie': config['設定'].get('cookie', raw=True),
-                    "User-Agent": 'Mozilla/5.0  115disk/11.2.0'
+                    "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
                 }
         self.downurl = 'http://proapi.115.com/app/chrome/downurl?t={}'
+
+    def xor115Enc(self, src, srclen, key, keylen):
+        mod4 = srclen % 4
+        ret = []
+        if mod4 != 0:
+            i = 0
+            j = 0
+            ref = mod4
+            while j < ref if ref >= 0 else j > ref:
+                ret.append(src[i] ^ key[i % keylen])
+                i = (j := j + 1) if ref >= 0 else (j := j - 1)
+        i = mod4
+        k = mod4
+        ref1 = mod4
+        ref2 = srclen
+        while k < ref2 if ref1 <= ref2 else k > ref2:
+            _key = (i - mod4) % keylen
+            if _key < len(key):
+                ret.append(src[i] ^ key[(i - mod4) % keylen])
+            else:
+                ret.append(src[i])
+
+            i = (k := k + 1) if ref1 <= ref2 else (k := k - 1)
+        return ret
+
+    def getkey(self, length, key):
+        if key is not None:
+            results = []
+            for i in range(length):
+                results.append(((key[i] + self.kts[length * i]) & 0xff) ^ self.kts[length * (length - 1 - i)])
+            return results
+        if length == 12:
+            return self.keyL
+        return self.keyS
+
+    def asymEncode(self, src, srclen):
+        m = 128 - 11
+        ret = ''
+        for i in range(math.floor((srclen + m - 1) / m)):
+            ret += self.rsa.encrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)]))
+        return base64.b64encode(self.rsa.hex2a(ret).encode("latin1"))
+
+    def asymDecode(self, src, srclen):
+        m = 128
+        ret = ''
+        for i in range(math.floor((srclen + m - 1) / m)):
+            ret += self.rsa.decrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)]))
+        return self.stringToBytes(ret)
+
+    def symEncode(self, src, srclen, key1, key2):
+        k1 = self.getkey(4, key1)
+        k2 = self.getkey(12, key2)
+        ret = self.xor115Enc(src, srclen, k1, 4)
+        ret.reverse()
+        ret = self.xor115Enc(ret, srclen, k2, 12)
+        return ret
+
+    def symDecode(self, src, srclen, key1, key2):
+        k1 = self.getkey(4, key1)
+        k2 = self.getkey(12, key2)
+        ret = self.xor115Enc(src, srclen, k2, 12)
+        ret.reverse()
+        ret = self.xor115Enc(ret, srclen, k1, 4)
+        return ret
+
+    def bytesToString(self, buf):
+        ret = ''
+        for i in buf:
+            ret += chr(i)
+        return ret
+
+    def stringToBytes(self, s):
+        ret = []
+        for i in s:
+            ret.append(ord(i))
+        return ret
+
+    def encode(self, src, tm):
+        key = self.stringToBytes(self.md5(f'!@###@#{tm}DFDR@#@#'))
+        tmp = self.stringToBytes(src)
+        tmp = self.symEncode(tmp, len(tmp), key, None)
+        tmp = key[0:16] + tmp
+        return self.asymEncode(tmp, len(tmp)), key
+
+    def decode(self, src, key):
+        tmp = self.stringToBytes(base64.b64decode(src.encode()).decode("latin1"))
+        tmp = self.asymDecode(tmp, len(tmp))
+        return self.bytesToString(self.symDecode(tmp[16:], len(tmp) - 16, key, tmp[0:16]))
 
     def md5(self, str):
         str = str.encode('utf-8')
@@ -73,131 +193,11 @@ class Download115:
         m.update(str)
         return m.hexdigest()
 
-    def stringToBytes(self, s):
-        ret = []
-        for i in s:
-            ret.append(ord(i))
-        return ret
-
-    def bytesToString(self, b):
-        ret = ''
-        for i in b:
-            ret += chr(i)
-        return ret
-
-    def m115_getkey(self, length, key):
-        if key is not None:
-            results = []
-            for i in range(length):
-                results.append(((key[i] + self.g_kts[length * i]) & 0xff) ^ self.g_kts[length * (length - 1 - i)])
-            return results
-        if length == 12:
-            return self.g_key_l
-        return self.g_key_s
-
-    def xor115_enc(self, src, srclen, key, keylen):
-        mod4 = srclen % 4
-        ret = []
-        if mod4 != 0:
-            for i in range(mod4):
-                ret.append(src[i] ^ key[i % keylen])
-        for i in range(mod4, srclen):
-            ret.append(src[i] ^ key[(i - mod4) % keylen])
-        return ret
-
-    def m115_sym_encode(self, src, srclen, key1, key2):
-        k1 = self.m115_getkey(4, key1)
-        k2 = self.m115_getkey(12, key2)
-        ret = self.xor115_enc(src, srclen, k1, 4)
-        ret.reverse()
-        ret = self.xor115_enc(ret, srclen, k2, 12)
-        return ret
-
-    def m115_sym_decode(self, src, srclen, key1, key2):
-        k1 = self.m115_getkey(4, key1)
-        k2 = self.m115_getkey(12, key2)
-        ret = self.xor115_enc(src, srclen, k2, 12)
-        ret.reverse()
-        ret = self.xor115_enc(ret, srclen, k1, 4)
-        return ret
-
-    def m115_asym_encode(self, src, srclen):
-        # ret = self.js.call('m115_asym_encrypt', src, srclen, self._prsa)
-        # return base64.b64encode(ret.encode("latin1"))
-
-        m = 128 - 11
-        ret = b''
-        for i in range(math.floor((srclen + m - 1) / m)):
-            ret += base64.b64decode(self.prsa_.encrypt(src[i * m:min((i + 1) * m, srclen)]))
-        return base64.b64encode(ret)
-
-
-        # m = 128 - 11
-        # ret = b''
-        # for i in range(math.floor((srclen + m - 1) / m)):
-        # #     # print(src[i * m:min((i + 1) * m, srclen)])
-        # #     ret += base64.b64decode(self.prsa.encrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)])).encode("utf8")).decode("latin1")
-        # #     ret += base64.b64decode(self.prsa.encrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)])).encode("utf8"))
-        #     ret += base64.b64decode(self.prsa.encrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)])).encode("utf8"))
-        # #     ret += base64.b64decode(self.prsa_.encrypt(self.bytesToString(src[i * m:min((i + 1) * m, srclen)])).encode("utf8"))
-        # #     # ret += base64.b64decode(self.js.call('getencrypt', self.bytesToString(src[i * m:min((i + 1) * m, srclen)]), self._prsa).encode("utf8")).decode("latin1")
-        # return base64.b64encode(ret)
-
-
-    def m115_asym_decode(self, src, srclen):
-        # ret = self.js.call('m115_asym_decode', src, srclen, self._srsa)
-        # return self.stringToBytes(ret)
-        # ret = c_rsa.m115_asym_decode(src, srclen, self.srsa_)
-        # return self.stringToBytes(ret)
-
-        m = 128
-
-        ret = []
-        for i in range(math.floor((srclen + m - 1) / m)):
-            ret.append(base64.b64encode(bytes(src[i * m:min((i + 1) * m, srclen)])))
-            # ret += srsa.decrypt(base64.b64encode(bytes(src[i * m:min((i + 1) * m, srclen)])))
-        return self.srsa_.decrypt__(ret)
-
-
-        # ret = []
-        # for i in range(math.floor((srclen + m - 1) / m)):
-        #     z = self.srsa_.decrypt(base64.b64encode(bytes(src[i * m:min((i + 1) * m, srclen)])))
-        #     print(len(z))
-        #     ret += z
-        # print(len(ret), '**----')
-        # return ret
-
-
-
-        # t = time.time()
-        # m = 128
-        # ret = ''
-        # for i in range(math.floor((srclen + m - 1) / m)):
-        #     # ret += self.srsa.decrypt(base64.b64encode(self.bytesToString(src[i * m:min((i + 1) * m, srclen)]).encode("latin1")).decode())
-        # #     # print(self.bytesToString(src[i * m:min((i + 1) * m, srclen)]))
-        #     ret += self.srsa.decrypt(base64.b64encode(bytes(src[i * m:min((i + 1) * m, srclen)])).decode())
-        # #     ret += self.srsa_.decrypt(base64.b64encode(bytes(src[i * m:min((i + 1) * m, srclen)])).decode())
-        # #     # ret += self.js.call('getdecrypt', base64.b64encode(self.bytesToString(src[i * m:min((i + 1) * m, srclen)]).encode("latin1")).decode(), self._srsa)
-        # return self.stringToBytes(ret)
-
-    def m115_encode(self, src, tm):
-        key = self.stringToBytes(self.md5(f'!@###@#{tm}DFDR@#@#'))
-        tmp = self.stringToBytes(src)
-        tmp = self.m115_sym_encode(tmp, len(tmp), key, None)
-        tmp = key[0:16] + tmp
-
-        return self.m115_asym_encode(tmp, len(tmp)), key
-
-    def m115_decode(self, src, key):
-        tmp = self.stringToBytes(base64.b64decode(src.encode()).decode("latin1"))
-        tmp = self.m115_asym_decode(tmp, len(tmp))
-        return self.bytesToString(self.m115_sym_decode(tmp[16:], len(tmp) - 16, key, tmp[0:16]))
-
     async def CreateDownloadTask(self, pc):
         # start = time.time()
         tmus = int(time.time())
         tm = math.floor(tmus)
-        data, key = self.m115_encode(f'{{"pickcode":"{pc}"}}', tm)
+        data, key = self.encode(f'{{"pickcode":"{pc}"}}', tm)
         data = quote(data, safe='...')
         data = f'data={data}'
         # _start = time.time() - start
@@ -205,16 +205,11 @@ class Download115:
         # start = time.time()
         try:
             if ret:
-                # end = time.time()
+                c = json.loads(self.decode(ret.json()['data'], key))
+                end = time.time()
                 # print(_start + (end - start))
-                return json.loads(self.m115_decode(ret.json()['data'], key))
+                return c
             return False
         except:
             return False
             # raise
-if __name__ == '__main__':
-    d = Download115()
-
-    z = [102, 99, 97, 102, 98, 49, 57, 97, 100, 56, 101, 102, 49, 48, 101, 57, 44, 60, 83, 162, 7, 202, 133, 118, 137, 67, 80, 207, 57, 100, 82, 226, 14, 198, 209, 62, 193, 8, 89, 222, 62, 125, 64, 242, 2, 194, 151, 103]
-    # x = [45, 14, 119, 211, 176, 148, 203, 100, 159, 212, 254, 83, 44, 27, 60, 147, 243, 148, 220, 108, 134, 141, 240, 80, 57, 90, 101]
-    # print(d.m115_asym_encode(z, len(z)))
