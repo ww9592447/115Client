@@ -93,15 +93,15 @@ class Qtext(MQtext):
 
     # 關閉
     async def closes(self):
+        with self.lock:
+            with set_state(self.state, self.uuid) as state:
+                state.update({'state': 'del'})
         if self not in self.islist:
             self.set_restore.setEnabled(False)
             self.set_closes.setEnabled(False)
             self.end.emit(self)
             return
         self.progressText.setText('等待關閉中中...')
-        with self.lock:
-            with set_state(self.state, self.uuid) as state:
-                state.update({'state': 'del'})
 
     # 開啟
     def open(self):
@@ -150,8 +150,12 @@ class DownloadList(MQList):
     async def folder_stop(self, qtext):
         qtext.progressText.setText('獲取資料夾資料中...')
         cid = qtext.cid
+        if cid in self.allpath and self.allpath[cid]['refresh']:
+            del self.allpath[cid]
         while (cid in self.allpath and qtext.count < self.allpath[cid]['count']) or cid not in self.allpath:
-            result = await self.refresh(qtext.cid, qtext.index, state=False)
+            result = True
+            if cid in self.allpath and qtext.count not in self.allpath[cid]:
+                result = await self.refresh(qtext.cid, qtext.index, state=False)
             if result is False or result == '0':
                 text = '資料夾不存在' if result == '0' else '獲取資料夾資料失敗'
                 # 顯示網路錯誤
@@ -235,6 +239,7 @@ class DownloadList(MQList):
         if qtext.uuid[0] == '0':
             state = self.state[qtext.uuid]
             del self.sha1_list[state['sha1']]
+            print(state['state'], exists(qtext.path))
             if state['state'] == 'del':
                 if exists(qtext.path):
                     remove(qtext.path)

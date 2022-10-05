@@ -62,6 +62,7 @@ class Directory:
             raise
         self.sign = result['sign']
         self.time = result['time']
+
         return result['sign'], result['time']
 
     async def get_uid(self):
@@ -104,6 +105,7 @@ class Directory:
         try:
             if self.sign is None:
                 await self.get_sign_and_time()
+            if self.uid is None:
                 await self.get_uid()
         except:
             return False
@@ -134,7 +136,6 @@ class Directory:
             # ac: security_code
             # type: web
             # cb: Close911_1656170362944
-
 
         else:
             for index, _url in zip(range(len(url)), url):

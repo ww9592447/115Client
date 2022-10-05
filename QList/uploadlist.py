@@ -279,6 +279,8 @@ class UploadList(MQList):
                     task.set_name('創建資料夾失敗')
                     self.folder_task[cid]['name'][name] = task
                 elif self.folder_task[cid]['task'] is None and name not in self.folder_task[cid]['name']:
+                    # if self.allpath[cid]['refresh']:
+                    #     del self.allpath[cid]
                     index = self.allpath[cid]['_page'][0] if cid in self.allpath else 0
                     task = create_task(self.refresh(cid, index, state=False))
                     task.set_name('獲取資料夾資料失敗')

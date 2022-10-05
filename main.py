@@ -1,6 +1,6 @@
 from module import QApplication, QWidget, split, set_event_loop, isfile, backdrop, MyQLabel, QFrame, Sidebar\
     , create_task, time, QLabel, picture, pybyte, MyIco, Window, sleep, splitext, srequests, getpath,\
-    isdir, walk, join, get_ico, QMetaMethod, remove, exists, ListDirectory, math, Path, set_state
+    isdir, walk, join, get_ico, QMetaMethod, remove, exists, ListDirectory, math, Path
 from multiprocessing import Process, Manager, Lock, Value, freeze_support
 from hints import error, myerror, myenter, offline, folderlist, sha1save, myfiledialog
 from configparser import ConfigParser
@@ -291,6 +291,7 @@ class Fake115GUI(Window):
                     self.uploadlist.sha1_add(state=state)
             remove('state.json')
 
+    # 網路
     async def network(self, cid, index=0, action=None, pages=None):
         # 重新設定目前窗口 垂直滾動條歸0
         self.listdirectory.scrollarea.verticalcontents.setvalue(0)
@@ -548,8 +549,7 @@ class Fake115GUI(Window):
                     create_task(self.uploadlist.add(data=data))
 
         elif action == '離線下載':
-            if result := await offline(self.directory):
-                await self.directory.add_offline(result[0], result[1])
+            await offline(self.directory)
             self.activateWindow()
 
     # 搜索回調
@@ -717,7 +717,6 @@ class Fake115GUI(Window):
                 return '0'
             if cid not in self.allpath:
                 self.allpath.update(self.dumps(cid, result, index))
-
             else:
                 _result = self.dumps(cid, result, index)
                 self.allpath[cid][index] = _result[cid][index]

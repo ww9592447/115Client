@@ -1,8 +1,10 @@
 from module import picture, QLabel, Window, QFont, QFrame, sleep, QLineEdit, \
     TextQLabel, QTextEdit, MyIco, MyQLabel, ListDirectory, time, create_task, get_ico, \
     splitext, math, QFileDialog, basename, QListView, QTreeView, QAbstractItemView, QDialogButtonBox
+from MyQlist.package import gif
 import winsound
 import re
+
 
 def error():
     def decorator(func):
@@ -135,6 +137,7 @@ async def myenter(title, name):
         await sleep(0.1)
 
 
+# 離線窗口
 async def offline(directory):
     class Offline(Window):
         def __init__(self):
@@ -158,11 +161,27 @@ async def offline(directory):
 
             # 開始離線按鈕
             MyQLabel(
-                '開始離線下載', (540, 190, 150, 40), clicked=self.end, qss=1, fontsize=16, parent=self.content_widget
+                '開始離線下載', (540, 190, 150, 40), clicked=lambda: create_task(self.end()),
+                qss=1, fontsize=16, parent=self.content_widget
             )
 
-            # 結果
-            self.result = None
+            # 設定等待灰色窗口
+            self.shadow_widget_ = QFrame(self)
+            # 設定灰色窗口名稱
+            self.shadow_widget_.setObjectName('shadow_widget_')
+            # 根據灰色窗口名稱 設定背景顏色
+            self.shadow_widget_.setStyleSheet(
+                '#shadow_widget_{background-color:rgba(242, 244, 248, 100);border-radius:15px}'
+            )
+            # 移動到可以完全顯示陰影
+            self.shadow_widget_.move(self.padding, self.padding)
+            # 灰色窗口隱藏
+            self.shadow_widget_.hide()
+
+            # 設定等待GIF
+            self.load = gif(self.shadow_widget_, '加載_')
+            # 設置 GIF 大小
+            self.load.resize(32, 32)
 
         async def folder(self):
             if data := await folderlist('選擇要保存的資料夾', '保存到這裡', directory):
@@ -171,28 +190,35 @@ async def offline(directory):
                 self.savetext.adjustSize()
                 self.button.move(self.savetext.x() + self.savetext.width() + 10, 269)
 
-        def end(self):
+        async def end(self):
+            self.shadow_widget_.show()
+            self.load.show()
             result = self.text.toPlainText()
             if result.find('\n') != -1:
                 _result = []
                 for text in result.split('\n'):
                     if text:
                         _result.append(text)
-                self.result = _result, self.cid
-            else:
-                self.result = result, self.cid
+                result = _result
+            if result:
+                while await directory.add_offline(result, self.cid) is False:
+                    if await myerror('網路錯誤', '請問是否重新嘗試') is False:
+                        break
             self.close()
 
-        def closeEvent(self, event):
-            if self.result is None:
-                self.result = False
-            event.accept()
+        def resizeEvent(self, event):
+            Window.resizeEvent(self, event)
+            self.shadow_widget_.resize(self.width() - self.padding * 2, self.height() - self.padding * 2)
+            self.load.move(
+                int((self.shadow_widget_.width() - self.load.width()) / 2),
+                int((self.shadow_widget_.height() - self.load.height()) / 2)
+            )
 
     _offline = Offline()
     _offline.show()
     while 1:
-        if _offline.result is not None:
-            return _offline.result
+        if _offline.isVisible() is False:
+            return
         await sleep(0.1)
 
 
@@ -597,6 +623,7 @@ def myfiledialog(parent):
 
     _myfiledialog = MyFileDialog()
     return _myfiledialog.result
+
 
 if __name__ == '__main__':
     from PyQt5.Qt import QApplication

@@ -27,7 +27,8 @@ class Upload115:
         self.task = None
         self.headers = {
             'Cookie': config['設定'].get('cookie', raw=True),
-            "User-Agent": 'aliyun-sdk-android/2.9.1'
+            'Content-Type': 'application/x-www-form-urlencoded',
+            "User-Agent": 'Mozilla/5.0;  Mac  OS  X/10.15.7;  115Desktop/2.0.1.7'
         }
         self.detect = {}
         self.thread = int(config['upload']['單文件上傳線程'])
