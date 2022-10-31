@@ -24,7 +24,11 @@ class GetSha1(Thread):
             blockhash = sha.hexdigest().upper()
             f.seek(0, 0)
             sha = hashlib.sha1()
-            sha.update(f.read())
+            while True:
+                data = f.read(1024 * 128)
+                if not data:
+                    break
+                sha.update(data)
             sha1 = sha.hexdigest().upper()
         self.result = (blockhash, sha1)
 
