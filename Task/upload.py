@@ -3,8 +3,7 @@ from threading import Thread
 import time
 import base64
 from module import set_state, gather, create_task, uuid1, hashlib, sleep, httpx, CancelledError
-# import oss2
-# from oss2.models import PartInfo
+
 
 
 def get_slice_md5(bio):
@@ -188,21 +187,6 @@ class Upload:
             with set_state(self.state, uuid) as state:
                 state.update({'stop': True})
 
-        # if not state['range']:
-        #     auth = oss2.Auth(self.upload115.token['AccessKeyId'], self.upload115.token['AccessKeySecret'])
-        #     bucket = oss2.Bucket(auth, self.upload115.token['endpoint'], state['bucket'])
-        #     parts = []
-        #     etag = self.state[uuid]['etag']
-        #     for i in range(1, len(etag) + 1):
-        #         parts.append(PartInfo(i, etag[str(i)][1:-1]))
-        #     headers_1 = {
-        #         'x-oss-security-token': self.upload115.token['SecurityToken'],
-        #         'x-oss-callback': state['cb']['x-oss-callback'].encode(),
-        #         'x-oss-callback-var': state['cb']['x-oss-callback-var'].encode()
-        #     }
-        #     z = bucket.complete_multipart_upload(state['upload_key'], state['upload_id'], parts, headers=headers_1)
-        #     print(z)
-        #     return '上傳完成'
 
         callback = Callback()
         callback.all_size = state['size']
@@ -229,12 +213,6 @@ class Upload:
                 state['upload_key'], state['upload_id'], state['cb']
             )
             return await self.detect_upload(result, state)
-            # if result:
-            #     return await self.detect_upload(result, state)
-            # else:
-            #     print(state['name'], '異常')
-            #     if not await self.directory.get_fid(state['name']):
-            #         return '上傳失敗 需要重新上傳'
         else:
             with self.lock:
                 with set_state(self.state, uuid) as state:
