@@ -1,4 +1,4 @@
-from module import QWidget, QLabel, QFont, Qt, backdrop, picture, MyIco, startfile,\
+from module import QWidget, QLabel, QFont, picture, MyIco, startfile,\
                    QFrame, popen, exists, create_task, QPalette, ScrollArea, QColor
 
 
@@ -67,7 +67,7 @@ class Qtest(QFrame):
 
 
 class EndList(QFrame):
-    def __init__(self, sidebar_1, network, parent=None):
+    def __init__(self, sidebar_1, network, text, parent=None):
         super().__init__(parent)
         # 設置滾動區
         self.scrollarea = ScrollArea(self)
@@ -87,6 +87,8 @@ class EndList(QFrame):
         self.sidebar_1 = sidebar_1
         # 前進cid
         self.network = network
+        # 設定完成數量
+        self.text = text
 
     # 添加
     def add(self, path, name, ico, size, send, cid=None):
@@ -96,6 +98,7 @@ class EndList(QFrame):
         for _qtext, index in zip(self.allqtest, range(len(self.allqtest))):
             _qtext.setGeometry(0, index * 56, self.width() - 2, 56)
         self.scrollcontents.setGeometry(0, 0, self.width() - 2, len(self.allqtest) * 56)
+        self.text(len(self.allqtest))
 
     def resizeEvent(self, event):
         self.scrollarea.resize(self.size())

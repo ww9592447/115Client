@@ -57,7 +57,6 @@ class Mprocess:
                     create_task(self.upload.sha1_task(uuid))
                 elif select == '8':
                     create_task(self.sha1.get(uuid))
-
             else:
                 await sleep(0.1)
-                continue
+

@@ -1,6 +1,6 @@
 from module import QApplication, QWidget, split, set_event_loop, isfile, backdrop, MyQLabel, QFrame, Sidebar\
     , create_task, time, QLabel, picture, pybyte, MyIco, Window, sleep, splitext, srequests, getpath,\
-    isdir, walk, join, get_ico, QMetaMethod, remove, exists, ListDirectory, math, Path
+    isdir, walk, join, get_ico, QMetaMethod, remove, exists, MDirectory, ListDirectory, math, Path, getdata
 from multiprocessing import Process, Manager, Lock, Value, freeze_support
 from hints import error, myerror, myenter, offline, folderlist, sha1save, myfiledialog
 from configparser import ConfigParser
@@ -16,6 +16,7 @@ from QList.aria2list import Aria2List
 from mprocess import Mprocess
 import re
 import json
+from typing import Callable
 
 
 def getsignal(self, name):
@@ -131,7 +132,7 @@ class Fake115GUI(Window):
         # 原本剪下目錄cid
         self._cut_cid = None
         # 添加中任務
-        self.add_task = None
+        self.task = {}
         # 目前側框
         self.sidebar = 1
         # 共用數據
@@ -151,50 +152,56 @@ class Fake115GUI(Window):
         # 按鈕+瀏覽窗口組合
         self.mylistdirectory = MyListDirectory(parent=self.child_window)
         # 加入傳輸完畢視窗
-        self.endlist = EndList(lambda: self.sidebar_switch(1, self.mylistdirectory), self.network, self.child_window)
+        self.endlist = EndList(lambda: self.sidebar_switch('1', self.mylistdirectory), self.network,
+                               lambda index: self.settext(self.sidebar_6, index),  self.child_window)
         # 加入下載視窗
         self.downloadlist = DownloadList(
-            self._state, self.allpath, self.lock, self.wait, self.waitlock,
-            self.config, self.endlist, self.refresh, parent=self.child_window
-        )
-        # 加入aria2視窗
-        self.aria2list = Aria2List(
-            self._state, self.allpath, self.lock, self.wait, self.waitlock,
-            self.config, self.endlist, self.refresh, parent=self.child_window
-        )
-        # 加入上傳視窗
-        self.uploadlist = UploadList(
-            self._state, self.allpath, self.lock, self.wait, self.waitlock,
-            self.config, self.endlist, self.refresh, self.add_folder, parent=self.child_window
+            self._state, self.lock, self.wait, self.waitlock,
+            self.config, self.endlist, self.getfolder, lambda index: self.settext(self.sidebar_2, index),
+            parent=self.child_window
         )
         # 加入sha1視窗
         self.sha1list = Sha1List(
-            self._state, self.allpath, self.lock, self.wait, self.waitlock,
-            self.refresh, parent=self.child_window
+            self._state, self.lock, self.wait, self.waitlock,
+            self.getfolder, lambda index: self.settext(self.sidebar_3, index),  parent=self.child_window
+        )
+        # 加入上傳視窗
+        self.uploadlist = UploadList(
+            self._state, self.lock, self.wait, self.waitlock,
+            self.config, self.endlist, self.allpath, self.search_add_folder, lambda index: self.settext(self.sidebar_4, index),
+            parent=self.child_window
+        )
+        # 加入aria2視窗
+        self.aria2list = Aria2List(
+            self._state, self.lock, self.wait, self.waitlock,
+            self.config, self.endlist, self.getfolder, lambda index: self.settext(self.sidebar_5, index),
+            parent=self.child_window
         )
         # 加入離線視窗
         self.offlinelist = Offlinelist(self.directory, lambda: self.sidebar_switch(1, self.mylistdirectory),
                                        self.network, parent=self.child_window)
+
         # 加入瀏覽視窗
         self.listdirectory = self.mylistdirectory.listdirectory
         # 首頁加入左側瀏覽窗口
         self.sidebar_1 = Sidebar('首頁', '黑色首頁', '藍色首頁', move=(0, 0),
-                                 click=lambda: self.sidebar_switch(1, self.mylistdirectory), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('1', self.mylistdirectory),
+                                 parent=self.content_widget)
         self.sidebar_2 = Sidebar('正在下載', '下載', '下載藍色', move=(0, 38),
-                                 click=lambda: self.sidebar_switch(2, self.downloadlist), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('2', self.downloadlist), parent=self.content_widget)
         self.sidebar_3 = Sidebar('sha1', '下載', '下載藍色', move=(0, 76),
-                                 click=lambda: self.sidebar_switch(3, self.sha1list), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('3', self.sha1list), parent=self.content_widget)
         self.sidebar_4 = Sidebar('正在上傳', '上傳', '上傳藍色', move=(0, 114),
-                                 click=lambda: self.sidebar_switch(4, self.uploadlist), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('4', self.uploadlist), parent=self.content_widget)
         self.sidebar_5 = Sidebar('Aria2', '黑色aria2', '藍色aria2', move=(0, 152),
                                  click=lambda: self.sidebar_switch(5, self.aria2list), parent=self.content_widget)
         self.sidebar_6 = Sidebar('傳輸完成', '傳輸完成', '傳輸完成藍色', move=(0, 190),
-                                 click=lambda: self.sidebar_switch(6, self.endlist), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('6', self.endlist), parent=self.content_widget)
         self.sidebar_7 = Sidebar('離線下載', '傳輸完成', '傳輸完成藍色', move=(0, 228),
-                                 click=lambda: self.sidebar_switch(7, self.offlinelist), parent=self.content_widget)
+                                 click=lambda: self.sidebar_switch('7', self.offlinelist), parent=self.content_widget)
 
         # 設定預設瀏覽窗口
-        self.sidebar_switch(1, self.mylistdirectory)
+        self.sidebar_switch('1', self.mylistdirectory)
         # 新增瀏覽視窗標題
         self.listdirectory.title_add('名稱', 400, 200)
         self.listdirectory.title_add(' 修改時間', 120, 120)
@@ -228,7 +235,7 @@ class Fake115GUI(Window):
         )
         # 設定 texts 重新命名 右鍵
         self.listdirectory.texts_menu_click_connect(
-            '重新命名', lambda: lambda: create_task(self.get_enter(action='重新命名'))
+            '重新命名', lambda: create_task(self.get_enter(action='重新命名'))
         )
         # 設定 texts 複製 右鍵
         self.listdirectory.texts_menu_click_connect('複製', self.copy)
@@ -267,32 +274,108 @@ class Fake115GUI(Window):
         self.resize(800, 400)
         create_task(self.network(cid='0', pages=True))
 
-        if exists('state.json'):
-            with open('state.json', 'r', encoding='utf-8') as f:
-                output = json.load(f)
-            for out in output.items():
-                state = {out[0]: out[1]}
-                action = out[0][0]
-                if action == '0':
-                    self.downloadlist.add(state=state)
-                elif action == '1':
-                    self.downloadlist.folder_add(state=state)
-                elif action == '2':
-                    self.aria2list.add(state=state)
-                elif action == '3':
-                    self.aria2list.folder_add(state=state)
-                elif action == '4':
-                    self.sha1list.add(state=state)
-                elif action == '5':
-                    self.sha1list.folder_add(state=state)
-                elif action == '6':
-                    create_task(self.uploadlist.add(state=state))
-                elif action == '7':
-                    self.uploadlist.sha1_add(state=state)
-            remove('state.json')
+    # 下載 資料夾 獲取資料
+    async def getfolder(self, cid: str):
+        # 查看是否有 cid and 是否需要刷新
+        if cid in self.allpath and self.allpath[cid]['refresh']:
+            # 刪除 cid
+            del self.allpath[cid]
+            # index 初始化
+        index = 0
+        while cid not in self.allpath or index < self.allpath[cid]['page']:
+            if cid not in self.allpath or index not in self.allpath[cid]['data']:
+                result = await self.refresh(cid, index, state=False)
+                if result is False or result == '0':
+                    return False, '資料夾不存在' if result == '0' else '獲取資料夾資料失敗'
+            index += 1
+        return True, self.allpath[cid]['all']
+
+    # 搜索資料夾 如果沒有則創建資料夾
+    async def search_add_folder(self, cid, names):
+        for name in names.split('\\'):
+            task = None
+            index = 0
+            while 1:
+                if cid in self.allpath and name in self.allpath[cid]['all']:
+                    cid = self.allpath[cid]['all'][name]['cid']
+                    break
+                elif (cid, name) not in self.task and cid in self.allpath and index in self.allpath[cid]['data'] \
+                        and (self.allpath[cid]['count'] == 0
+                             or index == self.allpath[cid]['page'] - 1
+                             or self.allpath[cid]['data'][index]['data'][-1]['category'] == '1'
+                             ):
+                    task = create_task(self.add_folder(cid, name))
+                    task.set_name('創建資料夾失敗')
+                    task.add_done_callback(lambda _task: self.task. pop((cid, name)))
+                    self.task[(cid, name)] = task
+                elif cid in self.allpath and index in self.allpath[cid]['data'] \
+                        and index != self.allpath[cid]['page'] - 1:
+                    if (index := index + 1) in self.allpath[cid]['data']:
+                        continue
+                elif (cid, name) not in self.task and (cid, index) not in self.task \
+                        and (cid in self.allpath and name not in self.allpath[cid]['all']
+                             or cid not in self.allpath):
+                    task = create_task(self.refresh(cid, index, state=False))
+                    task.set_name('獲取資料夾資料失敗')
+                    task.add_done_callback(lambda _task: self.task.pop((cid, index)))
+                    self.task[(cid, index)] = task
+                elif (cid, name) in self.task:
+                    task = self.task[(cid, name)]
+                elif (cid, index) in self.task:
+                    task = self.task[(cid, index)]
+                if task:
+                    if task.get_name() == '創建資料夾失敗':
+                        yield getdata('text', '創建資料夾中')
+                    result = await task
+                    if result is False or result == '0':
+                        yield getdata('資料夾不存在' if result == '0' else task.get_name())
+                    task = None
+        yield getdata('end', cid)
+
+    # 獲取 aria2 下載路徑
+    async def get_aria2_path(self):
+        data = {
+            'jsonrpc': '2.0',
+            'id': 'qwer',
+            'method': 'aria2.getGlobalOption',
+        }
+        response = await srequests.async_post(url=self.config['aria2-rpc']['rpc_url'], json=data)
+        if response.status_code == 200:
+            return response.json()['result']['dir']
+        else:
+            return False
+
+    # 下載
+    async def get_download(self, action):
+        data = self.listdirectory.extra()
+        for _data in [data] if isinstance(data, dict) else data:
+            if _data['category'] != '0':
+                if action == 'download':
+                    self.downloadlist.add(_data)
+                elif action == 'aria2':
+                    _data['path'] = await self.get_aria2_path()
+                    self.aria2list.add(data=_data)
+                elif action == 'sha1':
+                    self.sha1list.add(data=_data)
+            else:
+                if action == 'download':
+                    self.downloadlist.folder_add(data=_data)
+                elif action == 'aria2':
+                    _data['path'] = await self.get_aria2_path()
+                    self.aria2list.folder_add(data=_data)
+                elif action == 'sha1':
+                    _data['dir'] = _data['name']
+                    self.sha1list.folder_add(data=_data)
+
+    def settext(self, sidebar, index):
+        if index != 0:
+            sidebar.index.setText(f'({index})')
+            sidebar.index.adjustSize()
+        else:
+            sidebar.index.setText('')
 
     # 網路
-    async def network(self, cid, index=0, action=None, pages=None):
+    async def network(self, cid, index = 0, action = None, pages = None):
         # 重新設定目前窗口 垂直滾動條歸0
         self.listdirectory.scrollarea.verticalcontents.setvalue(0)
         # 重新設定目前窗口 橫向滾動條歸0
@@ -341,7 +424,7 @@ class Fake115GUI(Window):
             if self.self_path_list[0:3] == '搜索-':
                 # 如果是則把上一頁搜索設定成需要刷新
                 self.allpath[self.self_path_list]['refresh'] = True
-            if cid in self.allpath and index not in self.allpath[cid]:
+            if cid in self.allpath and index not in self.allpath[cid]['data']:
                 self.listdirectory.replace_contents(cid)
                 if self.listdirectory.page != 0:
                     self.listdirectory.quantity.setpage(0, callback=False)
@@ -362,18 +445,22 @@ class Fake115GUI(Window):
             if action and await action() is False:
                 result = False
             if result:
-                if self.allpath[cid][index]['add']:
+                if self.allpath[cid]['add']:
                     # 刪除舊的容器
                     self.listdirectory.delete_old_contents(cid)
                 del self.allpath[cid]
 
         if result:
-            if cid not in self.allpath or index not in self.allpath[cid] or pages is None\
-                    or not self.allpath[cid][index]['add']:
+            if cid not in self.allpath or index not in self.allpath[cid]['data'] or pages is None\
+                    or not self.allpath[cid]['data'][index]['add']:
                 if cid not in self.allpath:
                     self.listdirectory.new_contents()
-                if cid in self.allpath and index in self.allpath[cid] and not self.allpath[cid][index]['add']:
+                if cid in self.allpath and index in self.allpath[cid]['data'] \
+                        and not self.allpath[cid]['add']:
                     self.listdirectory.new_contents()
+                elif cid in self.allpath and index in self.allpath[cid]['data'] \
+                        and not self.allpath[cid]['data'][index]['add']:
+                    pass
                 elif cid[0:3] == '搜索-':
                     await self.search(cid, index)
                 else:
@@ -392,13 +479,15 @@ class Fake115GUI(Window):
             self.listdirectory.searchbutton.show()
         # 可以操作
         self.prohibit(False)
+        # 統計數字顯示
+        self.listdirectory.quantity.alltext.show()
         # 隱藏等待動畫
         self.listdirectory.load_hide()
         # 內容顯示
         self.listdirectory.content_hide()
 
     # 禁止操作
-    def prohibit(self, mode):
+    def prohibit(self, mode: bool):
         # 是否禁止 搜索欄
         self.listdirectory.directorycontainer.setEnabled(not mode)
         # 是否禁止 頁數欄
@@ -410,45 +499,10 @@ class Fake115GUI(Window):
             # 顯示背景右鍵
             self.listdirectory.backdrop_menu_show('新建資料夾')
 
-    # 下載
-    async def get_download(self, action):
-        data = self.listdirectory.extra()
-        for _data in [data] if isinstance(data, dict) else data:
-            if _data['category'] != '0':
-                if action == 'download':
-                    self.downloadlist.add(data=_data)
-                elif action == 'aria2':
-                    _data['path'] = await self.get_aria2_path()
-                    self.aria2list.add(data=_data)
-                elif action == 'sha1':
-                    self.sha1list.add(data=_data)
-            else:
-                if action == 'download':
-                    self.downloadlist.folder_add(data=_data)
-                elif action == 'aria2':
-                    _data['path'] = await self.get_aria2_path()
-                    self.aria2list.folder_add(data=_data)
-                elif action == 'sha1':
-                    _data['dir'] = _data['name']
-                    self.sha1list.folder_add(data=_data)
-
-    # 獲取 aria2 下載路徑
-    async def get_aria2_path(self):
-        data = {
-            'jsonrpc': '2.0',
-            'id': 'qwer',
-            'method': 'aria2.getGlobalOption',
-        }
-        response = await srequests.async_post(url=self.config['aria2-rpc']['rpc_url'], json=data)
-        if response.status_code == 200:
-            return response.json()['result']['dir']
-        else:
-            return False
-
     # 添加到窗口列表
     async def add(self, cid, index, value):
         # 獲取目錄相關資料
-        text, data, ico, my_mode, text_mode, _, _, _ = self.allpath[cid][index].values()
+        _, text, data, ico, my_mode, text_mode, _ = self.allpath[cid]['data'][index].values()
         path = self.allpath[cid]['path']
         # 查看 上一頁 是否可以顯示可用
         if len(self.up_page_list) != 1 and not self.listdirectory.get_pgup():
@@ -459,7 +513,9 @@ class Fake115GUI(Window):
 
         # 查看是否需要手動添加
         if value:
-            self.allpath[cid][index]['add'] = True
+            if not self.allpath[cid]['add']:
+                self.allpath[cid]['add'] = True
+            self.allpath[cid]['data'][index]['add'] = True
             if self.self_path_list[0:3] == '搜索-' and ' 所在目錄' not in self.listdirectory.alltitle:
                 self.listdirectory.title_add(' 所在目錄', least=80)
             elif self.self_path_list[0:3] != '搜索-' and ' 所在目錄' in self.listdirectory.alltitle:
@@ -478,11 +534,11 @@ class Fake115GUI(Window):
             self.listdirectory.directory_add(_path[0], data=_path[1])
 
         _index = index if value else 0
-        if self.listdirectory.page != _index and _index not in self.allpath[cid]['_page']:
+        if self.listdirectory.page != _index and _index not in self.allpath[cid]['data']:
             self.listdirectory.quantity.setpage(_index, callback=False)
 
     # 側邊框選擇
-    def sidebar_switch(self, index, window):
+    def sidebar_switch(self, index, window: QFrame):
         # 子窗口置頂
         window.raise_()
         # 上一個側邊框點擊隱藏
@@ -493,7 +549,7 @@ class Fake115GUI(Window):
         self.sidebar = index
 
     # 獲取輸入
-    async def get_enter(self, action):
+    async def get_enter(self, action: str):
         if action == '新建資料夾' and self.self_path_list[0:3] != '搜索-':
             if name := await myenter('新建資料夾', '新名稱'):
                 await self.network(self.self_path_list, index=self.listdirectory.page,
@@ -501,8 +557,9 @@ class Fake115GUI(Window):
                                    )
         elif action == '重新命名':
             if name := await myenter('重新命名', '新名稱'):
+                currentclick = self.listdirectory.now_all()
                 await self.network(self.self_path_list, index=self.listdirectory.page,
-                                   action=lambda: create_task(self.rename(self.self_path_list, name))
+                                   action=lambda: create_task(self.rename(name, currentclick[0].data['cid']))
                                    )
         elif action == '刪除':
             if await myerror('刪除', '請問是否刪除'):
@@ -523,7 +580,7 @@ class Fake115GUI(Window):
             if _data := await sha1save(self.self_path_list, path, self.directory):
                 for sha1 in re.findall('115://(.+)', _data[1]):
                     data = {'sha1': sha1, 'cid': _data[0]}
-                    create_task(self.uploadlist.sha1_add(data=data))
+                    self.uploadlist.sha1_add(data=data)
         elif action == '上傳檔案' and self.self_path_list[0:3] != '搜索-':
             paths = myfiledialog(self)
             for path in paths:
@@ -536,17 +593,17 @@ class Fake115GUI(Window):
                                 data = {
                                     'dir': _path, 'path': getpath(join(root, file)), 'cid': self.self_path_list
                                 }
-                                create_task(self.uploadlist.add(data=data))
+                                self.uploadlist.add(data=data)
                         elif files == [] and dirs == []:
                             _dir = getpath(root.replace(path, ''), False).parts
                             data = {
                                 'dir': '\\'.join(_dir[1:]),
                                 'cid': self.self_path_list, 'name': getpath(root, False).name
                             }
-                            create_task(self.uploadlist.new_folder_add(data=data))
+                            self.uploadlist.new_folder_add(data=data)
                 elif isfile(path):
                     data = {'dir': None, 'path': path, 'cid': self.self_path_list}
-                    create_task(self.uploadlist.add(data=data))
+                    self.uploadlist.add(data=data)
 
         elif action == '離線下載':
             await offline(self.directory)
@@ -580,14 +637,14 @@ class Fake115GUI(Window):
         create_task(self.network(cid, pages=False))
 
     # 頁數回調
-    def setpage(self, index):
+    def setpage(self, index: int):
         cid = self.self_path_list
-        if index not in self.allpath[cid] or self.allpath[cid]['refresh'] or\
-                (index in self.allpath[cid] and not self.allpath[cid][index]['add']):
+        if index not in self.allpath[cid]['data'] or self.allpath[cid]['refresh'] or\
+                (index in self.allpath[cid]['data'] and not self.allpath[cid]['data'][index]['add']):
             create_task(self.network(cid=self.self_path_list, index=index))
 
     # 目錄點擊回調
-    def directory_del(self, texts):
+    def directory_del(self, texts: MDirectory):
         create_task(self.network(cid=texts.data, pages=True))
 
     # 上一頁回調
@@ -629,36 +686,33 @@ class Fake115GUI(Window):
         for _data in [data] if isinstance(data, dict) else data:
             self._cut.append(_data['cid'])
 
-    # 重新整理
-    async def reorganize(self):
-        self.listdirectory.refresh_show()
-        del self.allpath[self.self_path_list]
-        create_task(self.network(cid=self.self_path_list, index=self.listdirectory.page))
-        self.listdirectory.refresh_hide()
-
-    # 分析115數據
-    def dumps(self, cid, items, index):
+    # 格式化115數據
+    def dumps(self, items, cid, index):
         def _getpath(__cid):
             return lambda: create_task(self.network(__cid, pages=True))
-        path = {cid: {index: {'text': [], 'data': [], 'ico': [], 'my_mode': [], 'text_mode': []
-            , 'read': len(items['data']), 'folder_read': False, 'add': False}, 'path': [], 'folder': {}}}
 
+        path = {'all': {}, 'text': [], 'data': [], 'ico': [], 'my_mode': [], 'text_mode': [], 'add': False}
         for data in items['data']:
+            # 獲取 檔案 or 資料夾 修改日期時間戳 並轉換成正常日期
             if 'te' in data:
                 _time = data['te']
             else:
                 _time = data['t'] if data['t'].isdigit() else int(
                     time.mktime(time.strptime(f"{data['t']}:0", "%Y-%m-%d %H:%M:%S")))
             _Time = time.strftime('%Y-%m-%d %H:%M', time.localtime(int(_time)))
+            # 獲取是否是檔案還是資料夾 ico
             ico = get_ico(splitext(data['n'])[1] if 'fid' in data else '資料夾')
+            # 獲取檔案大小
             size = data['s'] if 's' in data else '0'
-
-            path[cid][index]['text'].append(
+            # 獲取檔案cid
+            _cid = str(data['fid']) if 'fid' in data else str(data['cid'])
+            # 新增可視列表所需資料
+            path['text'].append(
                 {'名稱': data['n'], ' 修改時間': _Time,
                  ' 大小': '-' if size == '0' else pybyte(int(size))}
             )
-            _cid = str(data['fid']) if 'fid' in data else str(data['cid'])
-            path[cid][index]['data'].append({
+            # 新增檔案一切資料
+            path['data'].append({
                 'name': data['n'],
                 'category': '1' if 'fid' in data else '0',
                 'cid': _cid,
@@ -670,43 +724,54 @@ class Fake115GUI(Window):
                 'ico': ico,
                 'dp': data['dp'] if 'dp' in data else None,
             })
-
-            path[cid][index]['ico'].append(ico)
+            # 新增 檔案名稱 快速索引
+            path['all'][data['n']] = path['data'][-1]
+            # 新增ico
+            path['ico'].append(ico)
+            # 獲取點擊回調
             slot = _getpath(_cid)
             my_mode = {'doubleclick': [slot]} if ico == '資料夾' else None
             text_mode = {'名稱': {'leftclick': [slot], 'color': ((0, 0, 0), (6, 168, 255))}} if ico == '資料夾' else None
+            # 查看是否有所在目錄
             if 'dp' in data:
-                path[cid][index]['text'][-1].update({' 所在目錄': data['dp']})
-                pid = path[cid][index]['data'][-1]['pid']
+                path['text'][-1].update({' 所在目錄': data['dp']})
+                pid = path['data'][-1]['pid']
                 if text_mode:
                     text_mode.update({' 所在目錄': {'leftclick': [_getpath(pid)], 'color': ((0, 0, 0), (6, 168, 255))}})
                 else:
                     text_mode = {' 所在目錄': {'leftclick': [_getpath(pid)], 'color': ((0, 0, 0), (6, 168, 255))}}
-
-            path[cid][index]['my_mode'].append(my_mode)
-            path[cid][index]['text_mode'].append(text_mode)
-            if 'fid' not in data:
-                path[cid]['folder'][data['n']] = str(data['cid'])
-            elif not path[cid][index]['folder_read']:
-                path[cid][index]['folder_read'] = True
+            path['my_mode'].append(my_mode)
+            path['text_mode'].append(text_mode)
 
         if cid not in self.allpath:
-            page = math.ceil(items['count'] / self.listdirectory.pagemax)
-            _page = list(range(0, page))
-            if _page:
-                _page.remove(index)
-            _path = {'refresh': False, 'count': items['count'], 'read': len(items['data']),
-                     'page': page, '_page': _page,
-                     'folder_read': len(items['data']) != len(path[cid]['folder']), '_read': 1}
             if 'path' in items:
-                for __path in items['path']:
-                    path[cid]['path'].append((__path['name'], str(__path['cid'])))
-            # 搜索
-            elif 'folder' in items:
-                path[cid]['path'].append(('根目录', '0'))
-                path[cid]['path'].append((f'搜尋-{self.search_cid[1]}', cid))
-            path[cid].update(_path)
-        return path
+                _path = [(i['name'], str(i['cid'])) for i in items['path']]
+            else:
+                _path = [('根目录', '0'), (f'搜尋-{self.search_cid[1]}', cid)]
+            self.allpath.update(
+                {
+                    cid:
+                    {
+                        'data': {index: path},
+                        'path': _path,
+                        'all': path['all'],
+                        'refresh': False,
+                        'count': items['count'],
+                        'page': math.ceil(items['count'] / self.listdirectory.pagemax),
+                        'add': False,
+                    }
+                }
+            )
+        else:
+            self.allpath[cid]['data'][index] = path
+            self.allpath[cid]['all'].update(path['all'])
+
+    # 重新整理回調
+    async def reorganize(self):
+        self.listdirectory.refresh_show()
+        del self.allpath[self.self_path_list]
+        create_task(self.network(cid=self.self_path_list, index=self.listdirectory.page))
+        self.listdirectory.refresh_hide()
 
     # 刷新目錄
     @error()
@@ -715,28 +780,8 @@ class Fake115GUI(Window):
         if result:
             if cid != str(result['cid']):
                 return '0'
-            if cid not in self.allpath:
-                self.allpath.update(self.dumps(cid, result, index))
-            else:
-                _result = self.dumps(cid, result, index)
-                self.allpath[cid][index] = _result[cid][index]
-                self.allpath[cid][index]['folder_read'] = _result[cid][index]['folder_read']
-                self.allpath[cid]['folder'].update(_result[cid]['folder'])
-                self.allpath[cid]['read'] += _result[cid][index]['read']
-                self.allpath[cid]['_page'].remove(index)
-                if not self.allpath[cid]['folder_read'] and index == self.allpath[cid]['_read']:
-                    _index = index
-                    while 1:
-                        self.allpath[cid]['_read'] += 1
-                        if self.allpath[cid][_index]['folder_read']:
-                            self.allpath[cid]['folder_read'] = True
-                        if self.allpath[cid]['_read'] not in self.allpath[cid]:
-                            break
-                        _index += 1
-            if len(self.allpath[cid]['folder']) == self.allpath[cid]['count']:
-                self.allpath[cid]['folder_read'] = True
-            if self.allpath[cid]['_page'] == [] and not self.allpath[cid]['folder_read']:
-                self.allpath[cid]['folder_read'] = True
+            # 格式化115數據
+            self.dumps(result, cid, index)
         return result
 
     # 搜索
@@ -749,16 +794,8 @@ class Fake115GUI(Window):
             index * self.listdirectory.pagemax, self.listdirectory.pagemax
         )
         if result:
-            if cid not in self.allpath:
-                _result = self.dumps(cid, result, index)
-                self.allpath.update(_result)
-            else:
-                _result = self.dumps(cid, result, index)
-                self.allpath[cid][index] = _result[cid][index]
-                self.allpath[cid][index]['folder_read'] = _result[cid][index]['folder_read']
-                self.allpath[cid]['folder'].update(_result[cid]['folder'])
-                self.allpath[cid]['read'] += _result[cid][index]['read']
-                self.allpath[cid]['_page'].remove(index)
+            # 格式化115數據
+            self.dumps(result, cid, index)
         return result
 
     # 貼上
@@ -783,7 +820,16 @@ class Fake115GUI(Window):
     # 新建資料夾
     @error()
     async def add_folder(self, pid, name):
-        return await self.directory.add_folder(pid, name)
+        result = await self.directory.add_folder(pid, name)
+        if result:
+            self.allpath[pid]['refresh'] = True
+            self.allpath[pid]['all'][name] = {
+                'name': name,
+                'category': 0,
+                'cid': str(result['cid']),
+                'pid': pid,
+            }
+        return result
 
     # 重新命名
     @error()
@@ -838,8 +884,8 @@ class Fake115GUI(Window):
         self.downloadlist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.uploadlist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.sha1list.resize(self.content_widget.width() - 165, self.content_widget.height())
-        self.offlinelist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.aria2list.resize(self.content_widget.width() - 165, self.content_widget.height())
+        self.offlinelist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.endlist.resize(self.content_widget.width() - 165, self.content_widget.height())
 
     async def wait_close(self):
@@ -852,7 +898,7 @@ class Fake115GUI(Window):
     # 是否允許拖曳文件
     def dragEnterEvent(self, event):
         # 如果是在首頁則允許拖曳
-        if (self.sidebar == 1 and  self.self_path_list[0:3] != '搜索-') or self.sidebar == 3:
+        if (self.sidebar == '1' and self.self_path_list[0:3] != '搜索-') or self.sidebar == '3':
             # 允許拖曳
             event.acceptProposedAction()
 
@@ -861,7 +907,7 @@ class Fake115GUI(Window):
         file_path = event.mimeData().text()
         # 把路徑中/轉換成\
         file_path = file_path.replace('/', '\\')
-        if self.sidebar == 1 and self.self_path_list[0:3] != '搜索-':
+        if self.sidebar == '1' and self.self_path_list[0:3] != '搜索-':
             # 分割路徑
             for path in re.findall('file:...(.+)', file_path):
                 # 獲取初始目錄
@@ -873,15 +919,15 @@ class Fake115GUI(Window):
                                 data = {
                                     'dir': root.replace(_dir, ''), 'path': join(root, file), 'cid': self.self_path_list
                                 }
-                                create_task(self.uploadlist.add(data=data))
+                                self.uploadlist.add(data=data)
                         elif files == [] and dirs == []:
                             _path = Path(root)
                             data = {'dir': root.replace(_dir, ''), 'cid': self.self_path_list, 'name': _path.name}
-                            create_task(self.uploadlist.new_folder_add(data=data))
+                            self.uploadlist.new_folder_add(data=data)
                 elif isfile(path):
                     data = {'dir': None, 'path': path, 'cid': self.self_path_list}
-                    create_task(self.uploadlist.add(data=data))
-        elif self.sidebar == 3:
+                    self.uploadlist.add(data=data)
+        elif self.sidebar == '3':
             for path in re.findall('file:...(.+)', file_path):
                 _dir = re.search('(.+)\\\\.+$', path)[1] + '\\'
                 if isdir(path):
@@ -906,6 +952,7 @@ class Fake115GUI(Window):
             self.closes.value = 1
             create_task(self.wait_close())
             event.ignore()
+
 
 if __name__ == '__main__':
     freeze_support()

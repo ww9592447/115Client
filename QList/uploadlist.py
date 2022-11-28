@@ -1,87 +1,93 @@
-from module import pybyte, set_state, exists, getsize,\
-    split, sleep, create_task, timedelta, datetime, popen,\
-    get_ico, splitext, MQtext, uuid1, MQList
+from module import pybyte, set_state, getsize,\
+    split, sleep, create_task, timedelta, datetime,\
+    get_ico, splitext, MQtext1, MQtext2, uuid1, MQList, getdata
 
 
-class QFolder(MQtext):
-    def __init__(self, state, uuid, queuelist, islist, allqtext, parent=None):
-        super().__init__(state, uuid, file=False, queuelist=queuelist, islist=islist,
+class QFolder(MQtext2):
+    def __init__(self, state, _state, uuid, queuelist, transmissionlist, search_add_folder, parent=None):
+        super().__init__(state, _state, uuid, queuelist=queuelist, transmissionlist=transmissionlist, parent=parent)
+        # 搜索資料夾 如果沒有則創建資料夾
+        self.search_add_folder = search_add_folder
+
+    async def stop(self):
+        self.progressText.setText('查找資料夾中')
+        state = self.state[self.uuid]
+        async for result in self.search_add_folder(state['cid'], state['dir']):
+            self.setdata(result)
+
+
+class QSha1(MQtext2):
+    def __init__(self, state, _state, uuid, lock, queuelist, transmissionlist, allqtext, wait, waitlock, parent=None):
+        super().__init__(state, _state, uuid, lock=lock, queuelist=queuelist, transmissionlist=transmissionlist,
                          allqtext=allqtext, parent=parent)
-
-    # 開啟
-    def open(self):
-        if exists(self.path):
-            popen(f'explorer.exe /select, {self.path}')
-
-    # 暫停
-    async def pause(self):
-        if self not in self.islist:
-            self.set_switch(False)
-            self.queuelist.remove(self)
-            self.progressText.setText('暫停中...')
-
-    # 關閉
-    async def closes(self):
-        if self not in self.islist:
-            self.end.emit(self)
-            return
-
-
-class QSha1(MQtext):
-    def __init__(self, state, uuid, lock, queuelist, islist, allqtext, parent=None):
-        super().__init__(state, uuid, file=False, lock=lock, queuelist=queuelist, islist=islist,
-                         allqtext=allqtext, parent=parent)
-        self.task = None
+        # 傳送列表
+        self.wait = wait
+        # 傳送列表鎖
+        self.waitlock = waitlock
 
     async def set_state(self):
+        self.progressText.setText('查找資料夾中')
+        state = self.state[self.uuid]
+        async for result in self.search_add_folder(state['cid'], state['dir']):
+            if result['state'] == 'end':
+                with self.lock:
+                    with set_state(self.state, self.uuid) as state:
+                        state.update({'cid': result['result'], 'dir': None})
+            else:
+                self.setdata(result)
+        self.cancel = False
+        with self.waitlock:
+            self.wait.append(self.uuid)
         self.progressText.setText('上傳請求中...')
         while 1:
             if self.state[self.uuid]['state']:
-                if self.state[self.uuid]['state'] == '秒傳完成':
-                    self.end.emit(self)
-                else:
-                    self.progressText.setText(self.state[self.uuid]['state'])
-                    self.set_switch(False)
-                    self.queuelist.remove(self)
+                self.setdata(getdata(self.state[self.uuid]['state']))
                 return
-
-    # 暫停
-    async def pause(self):
-        if self not in self.islist:
-            self.set_switch(False)
-            self.queuelist.remove(self)
-            self.progressText.setText('暫停中...')
-
-    # 關閉
-    async def closes(self):
-        if self not in self.islist:
-            self.end.emit(self)
-            return
+            await sleep(0.1)
 
 
-class Qupload(MQtext):
-    def __init__(self, state, uuid, lock, queuelist, islist, allqtext, parent=None):
-        super().__init__(state, uuid, lock=lock, queuelist=queuelist, islist=islist,
-                         allqtext=allqtext, parent=parent)
-        self.task = None
-        self.path = state[uuid]['path']
+class Qupload(MQtext1):
+    def __init__(self, state, _state, uuid, lock, queuelist, transmissionlist, allqtext,
+                 settransmissionsize, search_add_folder, wait, waitlock,  parent=None):
+        super().__init__(state, _state, uuid, lock=lock, queuelist=queuelist, allqtext=allqtext,
+                         transmissionlist=transmissionlist, parent=parent)
+        # 傳送列表
+        self.wait = wait
+        # 傳送列表鎖
+        self.waitlock = waitlock
+        # 搜索資料夾 如果沒有則創建資料夾
+        self.search_add_folder = search_add_folder
+        # 設定所有下載總量
+        self.settransmissionsize = settransmissionsize
+        # 上傳檔案路徑
+        self.path = _state['path']
+        # 目前上傳量
+        self.size = _state['size']
         # 計算上傳速度
         self.sample_times, self.sample_values = [], []
         self.INTERVAL, self.samples = timedelta(milliseconds=100), timedelta(seconds=2)
 
-    async def set_state(self):
+    async def stop(self):
+        state = self.state[self.uuid]
+        if state['dir']:
+            self.progressText.setText('查找資料夾中')
+            async for result in self.search_add_folder(state['cid'], state['dir']):
+                if result['state'] == 'end':
+                    with self.lock:
+                        with set_state(self.state, self.uuid) as state:
+                            state.update({'cid': result['result'], 'dir': None})
+                else:
+                    self.setdata(result)
+        self.cancel = False
+        with self.waitlock:
+            self.wait.append(self.uuid)
         self.progressText.setText('上傳請求中...')
         while 1:
-            if self.state[self.uuid]['stop'] and self.state[self.uuid]['state'] is None:
-                self.get_rate(self.state[self.uuid]['size'])
-            elif self.state[self.uuid]['stop'] is False and self.state[self.uuid]['state']:
-                state = self.state[self.uuid]['state']
-                if state in ['上傳完成', '秒傳完成', 'del']:
-                    self.end.emit(self)
-                elif state != 'pause':
-                    self.progressText.setText(state)
-                    self.set_switch(False)
-                    self.islist.remove(self)
+            state = self.state[self.uuid]
+            if state['stop'] and state['state'] is None:
+                self.get_rate(state['size'])
+            elif not state['stop'] and state['state']:
+                self.setdata(getdata(state['state']))
                 return
             await sleep(0.1)
 
@@ -108,59 +114,28 @@ class Qupload(MQtext):
         if delta_time:
             speed = delta_value / delta_time.total_seconds()
             try:
-                self.progressBar.setValue(int(size / self.length * 100))
+                if self.progressBar.value() != (_size := int(size / self.length * 100)):
+                    self.progressBar.setValue(_size)
+                    self.progressBar.update()
+                self.settransmissionsize(size - self.size)
+                self.size = size
                 self.file_size.setText(f'{pybyte(size)}/{pybyte(self.length)}')
                 self.progressText.setText(pybyte(speed, s=True))
-            except:
+            except (Exception, ):
                 pass
-
-    # 暫停
-    async def pause(self):
-        self.set_switch(False)
-        with self.lock:
-            with set_state(self.state, self.uuid) as state:
-                state.update({'state': 'pause'})
-        if self in self.islist:
-            self.progressText.setText('等待暫停中...')
-            self.set_restore.setEnabled(False)
-            self.set_closes.setEnabled(False)
-            await self.task
-            self.set_closes.setEnabled(True)
-            self.set_restore.setEnabled(True)
-            self.islist.remove(self)
-        else:
-            self.queuelist.remove(self)
-        self.progressText.setText('暫停中...')
-
-    # 關閉
-    async def closes(self):
-        with self.lock:
-            self.set_restore.setEnabled(False)
-            self.set_closes.setEnabled(False)
-            with set_state(self.state, self.uuid) as state:
-                state.update({'state': 'del'})
-        if self not in self.islist:
-            self.end.emit(self)
-            return
-        self.progressText.setText('等待關閉中中...')
-
-    # 開啟
-    def open(self):
-        if exists(self.path):
-            popen(f'explorer.exe /select, {self.path}')
 
 
 class UploadList(MQList):
-    def __init__(self, state, allpath, lock, wait, waitlock, config, endlist, refresh, add_folder, parent=None):
-        super().__init__(state, allpath, lock, wait, waitlock, parent)
+    def __init__(self, state, lock, wait, waitlock, config, endlist, allpath, search_add_folder, text, parent=None):
+        super().__init__(state, lock, wait, waitlock, text, parent)
         # 最大上傳數
         self.upload_max = int(config['upload']['最大同時上傳數'])
-        # 目錄刷新
-        self.refresh = refresh
+        # 所有目錄資料
+        self.allpath = allpath
         # 下載完畢窗口
         self.endlist = endlist
-        # 新建資料夾
-        self.add_folder = add_folder
+        # 搜索資料夾 如果沒有則創建資料夾
+        self.search_add_folder = search_add_folder
         # 添加資料夾任務
         self.folder_task = {}
         # 開始檢查循環
@@ -168,174 +143,86 @@ class UploadList(MQList):
 
     async def set_stop(self):
         while 1:
-            if len(self.islist) < self.upload_max and self.queuelist:
+            if len(self.transmissionlist) < self.upload_max and self.queuelist:
+                # 提取待下載列表第一個
                 qtext = self.queuelist.pop(0)
-                # 把qtext 轉成上傳中
+                # 添加到下載列表
+                self.transmissionlist.append(qtext)
+                # 把qtext 轉成下載中
                 qtext.set_switch(True)
-                # 添加到上傳列表
-                self.islist.append(qtext)
+
                 with self.lock:
                     with set_state(self.state, qtext.uuid) as state:
-                        state.update({'state': None, 'stop': None})
-                if self.state[qtext.uuid]['dir']:
-                    create_task(self.folder_stop(qtext))
-                else:
-                    qtext.task = create_task(qtext.set_state())
-                    with self.waitlock:
-                        self.wait.append(qtext.uuid)
+                        # 檢查是否是檔案
+                        if qtext.uuid[0] in ['6', '7']:
+                            state.update({'state': None, 'stop': None})
+                qtext.task = create_task(qtext.stop())
             await sleep(0.1)
 
-    # 添加
-    async def add(self, data=None, state=None):
-        if value := data is not None:
+    # 添加上傳文件
+    def add(self, data, value=True):
+        if value:
             length = getsize(data['path'])
             _, name = split(data['path'])
             ico = get_ico(splitext(name)[1])
-            uuid = f'6{uuid1().hex}'
-            _state = {'length': length, 'size': 0, 'ico': ico, 'cid': data['cid'], 'second': None,
-                      'range': {}, 'cb': None, 'name': name, 'path': data['path'], 'sha1': None,
-                      'blockhash': None, 'etag': {}, 'upload_key': None, 'url': None, 'upload_id': None,
-                      'state': None, 'stop': None, 'dir': data['dir']}
-
-            with self.lock:
-                self.state[uuid] = _state
-        else:
-            with self.lock:
-                self.state.update(state)
-            uuid = list(state.keys())[0]
+            data = {'length': length, 'size': 0, 'ico': ico, 'cid': data['cid'], 'second': None,
+                    'range': {}, 'cb': None, 'name': name, 'path': data['path'], 'sha1': None,
+                    'blockhash': None, 'etag': {}, 'upload_key': None, 'url': None, 'upload_id': None,
+                    'state': None, 'bucket': None, 'stop': None, 'dir': data['dir'], 'result': None}
+        uuid = f'6{uuid1().hex}'
         qtext = Qupload(
-            self.state, uuid, self.lock, self.queuelist, self.islist,
-            self.allqtext, parent=self.scrollcontents
+            self.state, data, uuid, self.lock, self.queuelist, self.transmissionlist, self.allqtext
+            , self.settransmissionsize, self.search_add_folder, self.wait, self.waitlock, parent=self.scrollcontents
         )
-        self._addtext(qtext, value)
+        self._add(data, uuid, qtext, value)
 
-    # 添加
-    async def sha1_add(self, data=None, state=None):
-        if value := data is not None:
+    # sha1添加
+    def sha1_add(self, data, value=True):
+        if value:
             _data = data['sha1'].split('|')
             length = _data[1]
             sha1 = _data[2]
             blockhash = _data[3]
             ico = get_ico(splitext(_data[0])[1])
-            uuid = f'7{uuid1().hex}'
-            _state = {'name': _data[0], 'ico': ico, 'dir': '\\'.join(_data[4:]), 'cid': data['cid'], 'length': length,
-                      'sha1': sha1, 'blockhash': blockhash, 'state': None}
-            with self.lock:
-                self.state[uuid] = _state
-        else:
-            with self.lock:
-                self.state.update(state)
-            uuid = list(state.keys())[0]
+            data = {'name': _data[0], 'ico': ico, 'dir': '\\'.join(_data[4:]), 'cid': data['cid'],
+                    'length': int(length), 'sha1': sha1, 'blockhash': blockhash, 'state': None, 'result': None}
+        uuid = f'7{uuid1().hex}'
         qtext = QSha1(
-            self.state, uuid, self.lock, self.queuelist, self.islist,
-            self.allqtext, parent=self.scrollcontents
+            self.state, data, uuid, self.lock, self.queuelist, self.transmissionlist,
+            self.allqtext, self.wait, self.waitlock, parent=self.scrollcontents
         )
-        self._addtext(qtext, value)
+        self._add(data, uuid, qtext, value)
 
-    # 上傳空白資料夾
-    async def new_folder_add(self, data=None, state=None):
-        if value := data is not None:
-            uuid = f'9{uuid1().hex}'
-            with self.lock:
-                self.state[uuid] = {'cid': data['cid'], 'dir': data['dir'], 'name': data['name'], 'ico': '資料夾'}
-        else:
-            with self.lock:
-                self.state.update(state)
-            uuid = list(state.keys())[0]
+    # 新增傳空白資料夾
+    def new_folder_add(self, data, value=True):
+        if value:
+            data = {'cid': data['cid'], 'dir': data['dir'], 'name': data['name'], 'ico': '資料夾'}
+        uuid = f'9{uuid1().hex}'
         qtext = QFolder(
-            self.state, uuid, self.queuelist, self.islist, self.allqtext, parent=self.scrollcontents
+            self.state, data, uuid, self.queuelist, self.transmissionlist,
+            self.search_add_folder, parent=self.scrollcontents
         )
-        self._addtext(qtext, value)
+        self._add(data, uuid, qtext, value)
 
-    # 新增資料夾
-    async def folder_add(self, cid, name):
-        result = await self.add_folder(cid, name, state=False)
-        # 查看新增資料夾是否失敗
-        if result:
-            self.allpath[cid]['refresh'] = True
-            self.allpath[cid]['folder'][name] = str(result['cid'])
-        del self.folder_task[cid]['name'][name]
-        return result
+    # 關閉 回調
+    def close(self, qtext, state):
+        if qtext.uuid[0] in ['6', '7']:
+            self.allsize -= qtext.length
+            if qtext.uuid[0] == '6':
+                self.transmissionsize -= qtext.size
+            if self.allsize != 0:
+                self.progressbar.setValue(int(self.transmissionsize / self.allsize * 100))
 
-    def task_callback(self, task, cid):
-        self.folder_task[cid]['task'] = None
-
-    # 獲取資料夾資料 或者 創建資料夾
-    async def folder_stop(self, qtext):
-        state = self.state[qtext.uuid]
-        cid = state['cid']
-        qtext.progressText.setText(f'查找資料夾中')
-        for name in state['dir'].split('\\'):
-            task = None
-            if cid not in self.folder_task:
-                self.folder_task[cid] = {'task': None, 'name': {}}
-            while 1:
-                if cid in self.allpath and name in self.allpath[cid]['folder']:
-                    cid = self.allpath[cid]['folder'][name]
-                    break
-                elif cid in self.allpath and name not in self.folder_task[cid]['name']\
-                        and self.allpath[cid]['folder_read']:
-                    task = create_task(self.folder_add(cid, name))
-                    task.set_name('創建資料夾失敗')
-                    self.folder_task[cid]['name'][name] = task
-                elif self.folder_task[cid]['task'] is None and name not in self.folder_task[cid]['name']:
-                    # if self.allpath[cid]['refresh']:
-                    #     del self.allpath[cid]
-                    index = self.allpath[cid]['_page'][0] if cid in self.allpath else 0
-                    task = create_task(self.refresh(cid, index, state=False))
-                    task.set_name('獲取資料夾資料失敗')
-                    task.add_done_callback(lambda _task: self.task_callback(_task, cid))
-                    if cid in self.folder_task:
-                        self.folder_task[cid].update({'task': task})
-                    else:
-                        self.folder_task[cid] = {'task': task, 'name': {}}
-
-                elif self.folder_task[cid]['task']:
-                    task = self.folder_task[cid]['task']
-                elif name in self.folder_task[cid]['name']:
-                    task = self.folder_task[cid]['name'][name]
-                if task:
-                    _name = task.get_name()
-                    if _name == '創建資料夾失敗':
-                        qtext.progressText.setText(f'創建資料夾中')
-                    result = await task
-                    if result is False or result == '0':
-                        text = '資料夾不存在' if result == '0' else _name
-                        qtext.progressText.setText(text)
-                        qtext.set_switch(False)
-                        self.islist.remove(qtext)
-                        return
-                    task = None
-        if qtext.uuid[0] == '9':
-            self.end(qtext)
-        elif qtext.uuid[0] == '!':
-            with self.lock:
-                with set_state(self.state, qtext.uuid) as state:
-                    state.update({'cid': cid, 'dir': None})
-            qtext.task = create_task(qtext.set_state())
-
-        else:
-            with self.lock:
-                with set_state(self.state, qtext.uuid) as state:
-                    state.update({'cid': cid, 'dir': None})
-            qtext.task = create_task(qtext.set_state())
-            with self.waitlock:
-                self.wait.append(qtext.uuid)
-
-    def end(self, qtext):
-        state = self.state[qtext.uuid]
+    # 上傳完成 回調
+    def complete(self, qtext, state):
+        if 'result' in state and state['result'] == '秒傳完成':
+            self.settransmissionsize(self.state[qtext.uuid]['length'])
         if qtext.uuid[0] == '6':
-            if state['state'] != 'del':
-                self.endlist.add(qtext.path, qtext.name, state['ico'], pybyte(int(state['length'])),
-                                 state['state'], cid=state['cid'])
-                if state['cid'] in self.allpath:
-                    self.allpath[state['cid']]['refresh'] = True
+            self.endlist.add(qtext.path, qtext.name, state['ico'], pybyte(int(state['length'])),
+                             state['result'], cid=state['cid'])
         elif qtext.uuid[0] == '7':
             if qtext.progressText.text() != '文件大小超出上傳限制':
-                self.endlist.add('', qtext.name, state['ico'], pybyte(int(state['length'])), state['state'],
+                self.endlist.add('', qtext.name, state['ico'], pybyte(int(state['length'])), state['result'],
                                  cid=state['cid'])
-                if state['cid'] in self.allpath:
-                    self.allpath[state['cid']]['refresh'] = True
-        with self.lock:
-            del self.state[qtext.uuid]
-        self._deltext(qtext)
+        if state['cid'] in self.allpath:
+            self.allpath[state['cid']]['refresh'] = True

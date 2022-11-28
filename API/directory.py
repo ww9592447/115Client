@@ -1,5 +1,5 @@
 import time
-from module import  srequests
+from module import srequests
 from asyncio import sleep
 
 
@@ -11,7 +11,9 @@ class Directory:
                 "User-Agent": 'Mozilla/5.0  115disk/11.2.0'
             }
         # 文件目錄url
-        self.filesurl = 'https://aps.115.com/natsort/files.php?aid=1&cid={}&o=file_name&asc=1&offset={}&show_dir=1&limit={}&code=&scid=&snap=0&natsort=1&record_open_time=1&source=&format=json&type=&star=&is_share=&suffix=&custom_order=&fc_mix=0'
+        self.filesurl_1 = 'https://webapi.115.com/files?aid=1&cid={}&o=file_name&asc=1&offset={}&show_dir=1&limit={}&code=&scid=&snap=0&natsort=1&record_open_time=1&source=&format=json&fc_mix=&type=&star=&is_share=&suffix=&custom_order='
+        self.filesurl_2 = 'https://aps.115.com/natsort/files.php?aid=1&cid={}&o=file_name&asc=1&offset={}&show_dir=1&limit={}&code=&scid=&snap=0&natsort=1&record_open_time=1&source=&format=json&fc_mix=0&type=&star=&is_share=&suffix=&custom_order='
+
         # 新增文件夾url
         self.folderurl = 'https://webapi.115.com/files/add'
         # 重新命名url
@@ -29,7 +31,7 @@ class Directory:
         # 搜尋url
         self.searchurl = 'https://webapi.115.com/files/search?offset={}&limit={}&search_value={}&date=&aid=1&cid={}&pick_code=&type=&source=&format=json'
         # 獲取已上傳列表 url
-        self.listFileURL = 'https://webapi.115.com/files?aid=1&cid=%d&o=user_ptime&asc=0&offset=0&show_dir=0&limit=%d&natsort=1&format=json'
+        self.listFileurl = 'https://webapi.115.com/files?aid=1&cid=%d&o=user_ptime&asc=0&offset=0&show_dir=0&limit=20&natsort=1&format=json'
         # 獲取離線下載所需資料
         self.sign_and_timeurl = 'https://115.com/?ct=offline&ac=space'
         # 獲取離線uid
@@ -179,7 +181,6 @@ class Directory:
         except:
             return False
 
-
     # 新增資料夾
     async def add_folder(self, pid, name):
         data = {'pid': pid, 'cname': name}
@@ -188,18 +189,14 @@ class Directory:
             return result.json()
         return False
 
+    # 檢查上傳列表 是否有上傳成功
     async def get_fid(self, filename):
-        for _ in range(2):
-            result = await srequests.async_get(self.listFileURL, headers=self.headers)
-            if result:
-                result = result.json()
-                for i in result['data']:
-                    if i['n'] == filename:
-                        return i['fid']
-                print(filename)
-                print(result)
-                print('----------------------------------')
-            await sleep(1)
+        result = await srequests.async_get(self.listFileurl, headers=self.headers)
+        if result:
+            result = result.json()
+            for i in result['data']:
+                if i['n'] == filename:
+                    return i['fid']
         return False
 
     # 重新命名
@@ -275,7 +272,12 @@ class Directory:
 
     # 文件目錄
     async def path(self, cid, offset, limit):
-        result = await srequests.async_get(self.filesurl.format(cid, offset, limit), headers=self.headers, timeout=5, retry=5)
+        result = await srequests.async_get(self.filesurl_1.format(cid, offset, limit),
+                                           headers=self.headers, timeout=5, retry=5)
         if result:
+            if result.json()['state'] is False:
+                result = await srequests.async_get(self.filesurl_2.format(cid, offset, limit),
+                                                   headers=self.headers, timeout=5, retry=5)
+
             return result.json()
         return False

@@ -139,6 +139,7 @@ class Quantity(QFrame):
         self.listcheck.scrollarea.refresh()
         for texts in scrollcontents.children():
             texts.refresh()
+
         self.all(len(self.listcheck.alllist[self.listcheck.page]))
 
         # 查看目前頁數 是否等於 最大頁數
@@ -564,8 +565,6 @@ class ListCheck(QFrame):
 
     # 更換新的窗口
     def new_contents(self):
-        # if self.page != 0 and self.quantity:
-        #     self.quantity.setpage(0)
         self.cls_click()
         if self.quantity:
             self.quantity.hide()

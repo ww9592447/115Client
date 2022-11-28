@@ -22,9 +22,8 @@ class Upload115:
 
         self.user_id = None
         self.userkey = None
-        self.token = {}
+        self.token = {'time': 0}
         self.retry = 0
-        self.task = None
         self.headers = {
             'Cookie': config['設定'].get('cookie', raw=True),
             'Content-Type': 'application/x-www-form-urlencoded',
@@ -148,36 +147,9 @@ class Upload115:
         result = await srequests.async_post(url, params=params, data=data,
                                             headers=self.get_headers('POST', f'{key}', headers, params=params))
         if result is False:
-            print(cb)
-            print('-----------2')
-            print(self.token['SecurityToken'])
-            print('-----------2')
-            print(url)
-            print('-----------2')
-            print(key)
-            print('-----------2')
-            print(data)
-            print('-----------2')
-            print(headers)
             return False
         try:
             return result.json()
         except Exception as e:
-            print(cb)
-            print('-----------6')
-            print(self.token['SecurityToken'])
-            print('-----------6')
-            print(url)
-            print('-----------6')
-            print(key)
-            print('-----------6')
-            print(data)
-            print('-----------6')
-            print(headers)
-            print('-----------')
-            print(e)
-            print('-----------')
-            print(result)
-            print('------------')
             print(result.text)
-            raise e
+            return False
