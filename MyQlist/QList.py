@@ -1,9 +1,9 @@
 from .package import QFrame, QWidget, QApplication, sys, pyqtSignal, Qt, QPoint, QPainter, QPen, QColor,\
-    QPushButton, gif, QCursor, QMenu, QLabel, MyIco
+    gif, QCursor, QMenu, QLabel, MyIco
 
 from asyncio import sleep, set_event_loop
 from qasync import QEventLoop
-from MScroolBar import ScrollArea
+from .MScroolBar import ScrollArea
 from .QTitle import QTitle
 from .QText import QText
 

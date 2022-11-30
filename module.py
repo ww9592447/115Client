@@ -5,6 +5,7 @@ from PyQt5 import QtCore, QtWidgets
 from MyQlist.package import MyIco, picture, backdrop, gif
 from MyQlist.DList import ListDirectory, Directory
 from MyQlist.DList import Directory as MDirectory
+from MyQlist.MScroolBar import ScrollArea
 from asyncio import shield, get_running_loop, create_task, sleep, set_event_loop, get_event_loop, gather, CancelledError
 import time
 import srequests
@@ -13,7 +14,6 @@ from os.path import splitext, exists, split, getsize, isdir, join, isfile, basen
 from datetime import timedelta, datetime
 from enum import Enum
 from uuid import uuid1
-from MScroolBar import ScrollArea
 import hashlib
 import httpx
 import inspect
@@ -56,7 +56,7 @@ def getpath(path, value=True):
     if value:
         try:
             _path = _path.resolve()
-        except:
+        except (Exception, ):
             pass
         return str(_path)
     return _path
@@ -154,7 +154,7 @@ class MQtext(QFrame):
         else:
             return event
 
-    def setdata(self, data: dict[str, str]):
+    def setdata(self, data):
         if data['state'] == 'text':
             self.progressText.setText(data['result'])
         elif data['state'] == 'end':
@@ -181,7 +181,7 @@ class MQtext(QFrame):
                 self.task.cancel()
             try:
                 await self.task
-            except (BaseException, ):
+            except CancelledError:
                 pass
             self.set_button(True)
         self.progressText.setText('暫停中')
@@ -200,7 +200,7 @@ class MQtext(QFrame):
                 self.task.cancel()
             try:
                 await self.task
-            except (BaseException, ):
+            except CancelledError:
                 pass
         self.end.emit(self)
 

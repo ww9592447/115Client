@@ -1,5 +1,5 @@
 from .package import gif, MyIco, QPoint, QFrame, QLabel, QWidget, QCursor, QMenu, Qt
-from MScroolBar import ScrollArea
+from .MScroolBar import ScrollArea
 from .NText import QText
 from asyncio import sleep
 

@@ -16,7 +16,6 @@ from QList.aria2list import Aria2List
 from mprocess import Mprocess
 import re
 import json
-from typing import Callable
 
 
 def getsignal(self, name):
