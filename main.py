@@ -273,6 +273,30 @@ class Fake115GUI(Window):
         self.resize(800, 400)
         create_task(self.network(cid='0', pages=True))
 
+        if exists('state.json'):
+            with open('state.json', 'r', encoding='utf-8') as f:
+                output = json.load(f)
+            for out in output.items():
+                state = out[1]
+                action = out[0][0]
+                if action == '0':
+                    self.downloadlist.add(state, value=False)
+                elif action == '1':
+                    self.downloadlist.folder_add(state, value=False)
+                elif action == '2':
+                    self.aria2list.add(state, value=False)
+                elif action == '3':
+                    self.aria2list.folder_add(state, value=False)
+                elif action == '4':
+                    self.sha1list.add(state, value=False)
+                elif action == '5':
+                    self.sha1list.folder_add(state, value=False)
+                elif action == '6':
+                    create_task(self.uploadlist.add(state, value=False))
+                elif action == '7':
+                    self.uploadlist.sha1_add(state, value=False)
+            remove('state.json')
+
     # 下載 資料夾 獲取資料
     async def getfolder(self, cid: str):
         # 查看是否有 cid and 是否需要刷新
