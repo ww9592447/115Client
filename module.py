@@ -302,13 +302,13 @@ class MQList(QFrame):
         # 顯示所有數量
         self.text = text
         # 所有Qtext
-        self.allqtext: list[MQtext] = []
+        self.allqtext = []
         # 排隊列表
-        self.queuelist: list[MQtext] = []
+        self.queuelist = []
         # 正在傳輸列表
-        self.transmissionlist: list[MQtext] = []
+        self.transmissionlist = []
         # 暫停列表
-        self.pauselist: list[MQtext] = []
+        self.pauselist = []
         # 全部傳輸總量
         self.allsize = 0
         # 目前傳輸大小
