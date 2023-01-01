@@ -169,11 +169,11 @@ class Download:
                                     _data = len(data)
                                     sizemin += _data
                                     self.task[uuid][1] += _data
-                            if sizemin == self.state[uuid]['length'] or sizemin - 1 == sizemax:
-                                with self.lock:
-                                    with set_state(self.state, uuid) as state:
-                                        del state['range'][index]
-                                break
+                        if sizemin == self.state[uuid]['length'] or sizemin - 1 == sizemax:
+                            with self.lock:
+                                with set_state(self.state, uuid) as state:
+                                    del state['range'][index]
+                            break
                 except CancelledError:
                     with self.lock:
                         with set_state(self.state, uuid) as state:
