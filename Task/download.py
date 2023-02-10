@@ -1,10 +1,12 @@
 import httpx
 from threading import Thread
-from module import set_state, srequests, gather, exists, makedirs, create_task, split, sleep, hashlib, CancelledError
+from module import setstate, srequests, gather, exists, makedirs, create_task, split, sleep, hashlib, CancelledError, \
+    Lock, ConfigParser, Union
+from API.download115 import Download115
 
 
 # 檢查檔案 如果不存在則創建空白檔案
-def detect_file(path):
+def detect_file(path) -> None:
     _path, _ = split(path)
     if not exists(_path):
         makedirs(_path)
@@ -14,27 +16,25 @@ def detect_file(path):
 
 
 class Download:
-    def __init__(self, download115, state, lock, closes, config):
+    def __init__(self, download115: Download115, state: dict[str, any], lock: Lock, config: ConfigParser) -> None:
         # 下載API
-        self.download115 = download115
+        self.download115: Download115 = download115
         # 共享數據
-        self.state = state
+        self.state: dict[str, any] = state
         # 共享數據鎖
-        self.lock = lock
-        # 關閉信號
-        self.closes = closes
+        self.lock: Lock = lock
         # 用戶資料
-        self.config = config
+        self.config: ConfigParser = config
         # 所有任務
         self.task = {}
 
-    async def download_task(self, uuid):
+    async def download_task(self, uuid: str) -> None:
         state = self.state[uuid]
         path, name = state['path'], state['name']
         url = await self.detect_url(state['url'], state['pc'])
         if url:
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state['url'] = url
             # 如果沒有分割塊 獲取分割塊
             if not state['range']:
@@ -60,8 +60,8 @@ class Download:
                 if self.config['Download'].getboolean('Download_sha1'):
                     await self.wait_sha1(path, uuid)
             with self.lock:
-                with set_state(self.state, uuid) as state:
-                    if state['state'] != '檔案下載 不完全':
+                with setstate(self.state, uuid) as state:
+                    if state['state'] != 'error':
                         state.update(
                             {
                                 'state': state['state'] if state['state'] else 'end',
@@ -70,11 +70,11 @@ class Download:
                         )
         else:
             with self.lock:
-                with set_state(self.state, uuid) as state:
-                    state.update({'state': '網路異常 下載失敗', 'stop': False})
+                with setstate(self.state, uuid) as state:
+                    state.update({'state': 'error', 'result': '網路異常 下載失敗', 'stop': False})
 
     # 檢測檔案完整性
-    async def wait_sha1(self, path, uuid):
+    async def wait_sha1(self, path: str, uuid: str) -> None:
         shs1 = Thread(target=self.check_sha1, args=(path, uuid,))
         shs1.start()
         while 1:
@@ -84,9 +84,9 @@ class Download:
             return
 
     # 檢測檔案完整性
-    def check_sha1(self, path, uuid):
+    def check_sha1(self, path: str, uuid: str) -> None:
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 state.update({'state': '檢測中'})
         with open(path, 'rb') as f:
             sha = hashlib.sha1()
@@ -96,16 +96,16 @@ class Download:
                     break
                 sha.update(data)
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     if state['sha1'] != sha.hexdigest().upper():
-                        state.update({'state': '檔案下載 不完全'})
+                        state.update({'state': 'error', 'result': '檔案下載 不完全'})
                     else:
                         state.update({'state': None})
 
     # 獲取分割塊
-    async def range(self, uuid):
+    async def range(self, uuid: str) -> None:
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 if 409600 < state['length']:
                     _split = int(state['length'] / 7)
                     initial = 0
@@ -118,7 +118,7 @@ class Download:
                     state['range'][0] = [0, state['length']]
 
     # 檢查url是否可用
-    async def detect_url(self, url, pc):
+    async def detect_url(self, url: str, pc: str) -> str:
         if url:
             response = await srequests.async_head(url, headers=self.download115.headers, retry=2, timeout=5)
             if response.status_code == 200:
@@ -130,17 +130,17 @@ class Download:
         return url
 
     # 獲取url
-    async def get_url(self, pc):
+    async def get_url(self, pc: str) -> Union[str, bool]:
         result = await self.download115.CreateDownloadTask(pc)
         if result:
             return result[list(result)[0]]['url']['url']
         else:
             return False
 
-    async def setsize(self, uuid):
+    async def setsize(self, uuid: str) -> None:
         while not self.task[uuid][0].done():
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     if state['state']:
                         self.task[uuid][0].cancel()
                     else:
@@ -148,7 +148,7 @@ class Download:
             await sleep(0.1)
         del self.task[uuid]
 
-    async def run(self, uuid, url, key, path):
+    async def run(self, uuid: str, url: str, key: list[int, ...], path: str) -> None:
         while 1:
             if not key:
                 return
@@ -169,33 +169,34 @@ class Download:
                                     _data = len(data)
                                     sizemin += _data
                                     self.task[uuid][1] += _data
-                        if sizemin == self.state[uuid]['length'] or sizemin - 1 == sizemax:
-                            with self.lock:
-                                with set_state(self.state, uuid) as state:
-                                    del state['range'][index]
-                            break
+                    if sizemin == self.state[uuid]['length'] or sizemin - 1 == sizemax:
+                        with self.lock:
+                            with setstate(self.state, uuid) as state:
+                                del state['range'][index]
+                        break
+
                 except CancelledError:
                     with self.lock:
-                        with set_state(self.state, uuid) as state:
+                        with setstate(self.state, uuid) as state:
                             state['range'][index] = (sizemin, sizemax)
                             state['size'] = self.task[uuid][1]
                     return
                 except (Exception, ):
                     if stop == 4:
                         with self.lock:
-                            with set_state(self.state, uuid) as state:
+                            with setstate(self.state, uuid) as state:
                                 state.update({'state': 'error'})
                         return
 
-    async def aria2_task(self, uuid):
+    async def aria2_task(self, uuid: str) -> None:
         if (url := await self.get_url(self.state[uuid]['pc'])) is False:
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state['state'] = '獲取url失敗'
             return
         await create_task(self.aria2_rpc(url, uuid))
 
-    async def aria2_rpc(self, url, uuid):
+    async def aria2_rpc(self, url: str, uuid: str) -> None:
         state = self.state[uuid]
         data = {
             'jsonrpc': '2.0',
@@ -209,19 +210,19 @@ class Download:
             data['params'][1]['checksum'] = f'sha-1={state["sha1"]}'
         response = await srequests.async_post(url=self.config['aria2-rpc']['rpc_url'], json=data)
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 if response.status_code == 200:
                     result = response.json().get("result", [])
                     state.update({'gid': result})
                 else:
                     state.update({'state': '無法調用aria2_rpc'})
 
-    async def sha1_task(self, uuid):
-        async def _task():
+    async def sha1_task(self, uuid: str) -> None:
+        async def _task() -> None:
             if (url := await self.get_url(self.state[uuid]['pc'])) is False:
                 with self.lock:
-                    with set_state(self.state, uuid) as state:
-                        state['state'] = '獲取下載鏈結失敗'
+                    with setstate(self.state, uuid) as _state:
+                        _state['state'] = '獲取下載鏈結失敗'
                 return
             await self.download_sha1(url, uuid)
         task = create_task(_task())
@@ -235,10 +236,10 @@ class Download:
                 break
             await sleep(0.1)
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 state['stop'] = False
 
-    async def download_sha1(self, url, uuid):
+    async def download_sha1(self, url: str, uuid: str) -> None:
         for stop in range(5):
             _bytes = b''
             headers = {**{'Range': 'bytes=0-131072'}, **self.download115.headers}
@@ -250,12 +251,12 @@ class Download:
                 sha1 = hashlib.sha1()
                 sha1.update(_bytes[0: 128 * 1024])
                 with self.lock:
-                    with set_state(self.state, uuid) as state:
+                    with setstate(self.state, uuid) as state:
                         state['blockhash'] = sha1.hexdigest().upper()
                 return
-            except:
+            except (Exception, ):
                 if stop == 4:
                     with self.lock:
-                        with set_state(self.state, uuid) as state:
+                        with setstate(self.state, uuid) as state:
                             state['blockhash'] = False
                     return

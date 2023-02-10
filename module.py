@@ -1,8 +1,11 @@
 from PyQt5.Qt import QGuiApplication, QFrame, QRect, QCursor, QApplication, QPushButton, QFont, Qt, QLabel,\
     pyqtSignal, QWidget, QMessageBox, QColor, QPalette, QLineEdit, QTextEdit, QProgressBar, QFileDialog, QMetaMethod,\
-    QListView, QTreeView, QDialogButtonBox, QAbstractItemView, QSize, QMenu
+    QListView, QTreeView, QDialogButtonBox, QAbstractItemView, QSize, QMenu, QCloseEvent, QDragEnterEvent, QDropEvent, \
+    QDesktopWidget, QFileDialog
 from PyQt5 import QtCore, QtWidgets
-from MyQlist.package import MyIco, picture, backdrop, gif
+from MyQlist.module import Union, TextSave, Callable, MyIco, picture, backdrop, MyTextSave, gif, Frame, QObject,\
+    QResizeEvent, TypedDict, Optional, NTextSave, QPixmap, QButtonGroup
+from typing import Awaitable, AsyncIterable
 from MyQlist.DList import ListDirectory, Directory
 from MyQlist.DList import Directory as MDirectory
 from MyQlist.MScroolBar import ScrollArea
@@ -19,26 +22,17 @@ import httpx
 import inspect
 from pathlib import Path
 import math
+from multiprocessing import Process, Manager, Lock, Value, freeze_support
+from configparser import ConfigParser
 
 
-# 設定邊框
-class Frame(QFrame):
-    def __init__(self, parent):
-        super().__init__(parent)
-        self.setStyleSheet('background-color:rgba(200, 200, 200, 125)')
-
-
-def getdata(state: str, result: str = None):
-    return {'state': state, 'result': result if result else ''}
-
-
-def pybyte(bytes, s=False):
+def pybyte(bytes_: int, s: bool = False):
     if s:
         s = '/s'
     else:
         s = ''
-    if bytes >= 1024:
-        kb = bytes / 1024
+    if bytes_ >= 1024:
+        kb = bytes_ / 1024
         if kb <= 1024:
             return "%.2fKB%s" % (kb, s)
         mb = kb / 1024
@@ -48,10 +42,10 @@ def pybyte(bytes, s=False):
             gb = mb / 1024
             return "%.2fGB%s" % (gb, s)
     else:
-        return "%.2fB%s" % (bytes, s)
+        return "%.2fB%s" % (bytes_, s)
 
 
-def getpath(path, value=True):
+def getpath(path: str, value: bool = True):
     _path = Path(path)
     if value:
         try:
@@ -98,48 +92,64 @@ class MQtext(QFrame):
     end = pyqtSignal(QWidget)
     toggle = pyqtSignal(QWidget, bool)
 
-    def __init__(self, state, uuid, _state, queuelist=None, transmissionlist=None, allqtext=None, lock=None, parent=None):
+    def __init__(
+            self,
+            state: dict[str, any],
+            uuid: str,
+            data: dict[str, any],
+            queuelist: Optional[list[QObject, ...]] = None,
+            transmissionlist: Optional[list[QObject, ...]] = None,
+            allqtext: Optional[list[QObject, ...]] = None,
+            lock: Optional[Lock] = None,
+            parent: Optional[QObject] = None
+    ) -> None:
         super().__init__(parent)
         # 共享數據資料
-        self.state = state
+        self.state: dict[str, any] = state
         # 數據鎖
-        self.lock = lock
+        self.lock: Optional[Lock] = lock
+        # 所有qtest 列表
+        self.allqtext: Optional[list[QObject, ...]] = allqtext
+        # 紀錄id
+        self.uuid: str = uuid
+        # 排隊列表
+        self.queuelist: Optional[list[QObject, ...]] = queuelist
+        # 正在傳輸中列表
+        self.transmissionlist: Optional[list[QObject, ...]] = transmissionlist
         # 任務
         self.task = None
         # 是否能夠取消任務
-        self.cancel = True
-        # 所有qtest 列表
-        self.allqtext = allqtext
-        # 紀錄id
-        self.uuid = uuid
-        # 排隊列表
-        self.queuelist = queuelist
-        # 正在傳輸中列表
-        self.transmissionlist = transmissionlist
+        self.cancel: bool = True
         # 檔案名稱
-        self.name = _state['name']
+        self.name: str = data['name']
         # 檔案圖標
-        self.name_ico = QLabel(self)
+        self.name_ico: QLabel = QLabel(self)
         # 檔案名稱
-        self.file_name = QLabel(_state['name'], self)
+        self.file_name: QLabel = QLabel(data['name'], self)
         # 操作按鈕容器
-        self.ico = QFrame(self)
+        self.ico: QFrame = QFrame(self)
         # 設定操作按鈕容器背景空白
         self.ico.setStyleSheet('background-color:rgb(255, 255, 255)')
         # 設置傳輸速度 or 狀態文字
-        self.progressText = QLabel(self.ico)
+        self.progressText: QLabel = QLabel(self.ico)
         # 設文字顏色
         self.progressText.setStyleSheet('color:rgba(50, 50, 50, 150)')
         # 操作按鈕容器置頂
         self.ico.raise_()
         y = lambda height: int((56 - height) / 2)
 
-        self.set_pause = MyIco('黑色暫停', '藍色暫停', coordinate=(219, y(10), 8, 10),
-                               click=self.getevent('pause'), state=True, parent=self.ico)
-        self.set_restore = MyIco('黑色恢復下載', '藍色恢復下載', coordinate=(219, y(11), 8, 11),
-                                 click=self.getevent('restore'), state=True, parent=self.ico)
-        self.set_closes = MyIco('黑色關閉下載', '藍色關閉下載', coordinate=(264, y(10), 9, 10),
-                                state=True, click=self.getevent('close'), parent=self.ico)
+        self.set_pause: MyIco = MyIco(
+            '黑色暫停', '藍色暫停', coordinate=(219, y(10), 8, 10),
+            click=self.getevent('pause'), state=True, parent=self.ico
+        )
+        self.set_restore: MyIco = MyIco(
+            '黑色恢復下載', '藍色恢復下載', coordinate=(219, y(11), 8, 11),
+            click=self.getevent('restore'), state=True, parent=self.ico
+        )
+        self.set_closes: MyIco = MyIco(
+            '黑色關閉下載', '藍色關閉下載', coordinate=(264, y(10), 9, 10),
+            state=True, click=self.getevent('close'), parent=self.ico
+        )
         MyIco('黑色開啟資料夾', '藍色開啟資料夾', coordinate=(308, y(13), 14, 13),
               state=True, click=self.getevent('open'), parent=self.ico)
         self.set_restore.hide()
@@ -147,35 +157,33 @@ class MQtext(QFrame):
                            '; background-color:rgb(255, 255, 255)}')
 
     # 判斷函數是否是異步並返回相應調用方式
-    def getevent(self, name):
+    def getevent(self, name: str) -> Callable[[], Union[None, Awaitable]]:
         event = getattr(self, name)
         if inspect.iscoroutinefunction(event):
             return lambda: create_task(event())
         else:
             return event
 
-    def setdata(self, data):
+    def setstate(self, data: dict[str, Union[str, bool]]) -> None:
         if data['state'] == 'text':
             self.progressText.setText(data['result'])
         elif data['state'] == 'end':
             self.end.emit(self)
-        elif data['state'] in ['pause', 'close']:
-            pass
-        else:
+        elif data['state'] == 'error':
             # 顯示網路錯誤
-            self.progressText.setText(data['state'])
+            self.progressText.setText(data['result'])
             # qtext 轉成暫停
             self.set_switch(False)
 
     # 暫停
-    async def pause(self):
+    async def pause(self) -> None:
         self.set_switch(False)
         if self.task and not self.task.done():
             self.progressText.setText('等待暫停中...')
             self.set_button(False)
             if 'state' in self.state[self.uuid]:
                 with self.lock:
-                    with set_state(self.state, self.uuid) as state:
+                    with setstate(self.state, self.uuid) as state:
                         state.update({'state': 'pause'})
             if self.cancel:
                 self.task.cancel()
@@ -187,14 +195,14 @@ class MQtext(QFrame):
         self.progressText.setText('暫停中')
 
     # 關閉
-    async def close(self):
+    async def close(self) -> None:
         self.set_switch(False)
         if self.task and not self.task.done():
             self.progressText.setText('等待關閉中...')
             self.set_button(False)
             if 'state' in self.state[self.uuid]:
                 with self.lock:
-                    with set_state(self.state, self.uuid) as state:
+                    with setstate(self.state, self.uuid) as state:
                         state.update({'state': 'close'})
             if self.cancel:
                 self.task.cancel()
@@ -205,12 +213,12 @@ class MQtext(QFrame):
         self.end.emit(self)
 
     # 開啟
-    def open(self):
+    def open(self) -> None:
         if exists(self.path):
             popen(f'explorer.exe /select, {self.path}')
 
     # 設定暫停開始按鈕狀態
-    def set_switch(self, _bool):
+    def set_switch(self, _bool: bool) -> None:
         # 開始
         if _bool:
             self.progressText.setText('')
@@ -223,12 +231,12 @@ class MQtext(QFrame):
         self.toggle.emit(self, _bool)
 
     # 設定按鈕是否可用
-    def set_button(self, value):
+    def set_button(self, value: bool) -> None:
         self.set_restore.setEnabled(value)
         self.set_restore.setEnabled(value)
 
     # 恢復
-    def restore(self):
+    def restore(self) -> None:
         self.set_switch(True)
         index = -1
         _index = self.allqtext.index(self)
@@ -241,22 +249,23 @@ class MQtext(QFrame):
         else:
             self.queuelist.insert(index, self)
 
-    def resizeEvent(self, e):
+    # 調整大小事件
+    def resizeEvent(self, event: QResizeEvent) -> None:
         self.ico.setGeometry(self.width() - 360, 0, 360, 55)
 
 
 class MQtext1(MQtext):
-    def __init__(self, state, _state, uuid, queuelist=None, transmissionlist=None, allqtext=None, lock=None, parent=None):
-        super().__init__(state, uuid, _state, queuelist, transmissionlist, allqtext, lock, parent)
+    def __init__(self, state, data, uuid, queuelist=None, transmissionlist=None, allqtext=None, lock=None, parent=None):
+        super().__init__(state, uuid, data, queuelist, transmissionlist, allqtext, lock, parent)
         # 檔案大小
-        self.length = _state['length']
+        self.length = data['length']
         self.name_ico.setGeometry(15, 15, 30, 30)
-        self.name_ico.setPixmap(picture(f'_{_state["ico"]}'))
+        self.name_ico.setPixmap(picture(f'_{data["ico"]}'))
         self.file_name.setFont(QFont("細明體", 9))
         self.file_name.move(55, 16)
 
         # 設置檔案大小
-        self.file_size = QLabel(f'{pybyte(_state["size"])}/{pybyte(_state["length"])}', self)
+        self.file_size = QLabel(f'{pybyte(data["size"])}/{pybyte(data["length"])}', self)
         self.file_size.setFont(QFont("細明體", 9))
         self.file_size.move(55, 37)
         self.file_size.setFixedWidth(120)
@@ -266,8 +275,8 @@ class MQtext1(MQtext):
         self.progressBar.setMaximum(100)
         self.progressBar.setGeometry(0, 14, 152, 12)
         self.progressBar.setTextVisible(False)
-        if _state['size'] != 0:
-            self.progressBar.setValue(int(_state['size'] / _state['length'] * 100))
+        if data['size'] != 0:
+            self.progressBar.setValue(int(data['size'] / data['length'] * 100))
         self.progressBar.setStyleSheet('QProgressBar{border: 0px; background:rgb(200, 100, 200) ;'
                                        'background-color: rgb(229, 230, 234);color:rgb(60, 104, 137)}'
                                        'QProgressBar::chunk {background-color: rgb(6, 168, 255)}'
@@ -277,10 +286,10 @@ class MQtext1(MQtext):
 
 
 class MQtext2(MQtext):
-    def __init__(self, state, _state, uuid, queuelist=None, transmissionlist=None, allqtext=None, lock=None, parent=None):
-        super().__init__(state, uuid, _state, queuelist, transmissionlist, allqtext, lock, parent)
+    def __init__(self, state, data, uuid, queuelist=None, transmissionlist=None, allqtext=None, lock=None, parent=None):
+        super().__init__(state, uuid, data, queuelist, transmissionlist, allqtext, lock, parent)
         self.name_ico.setGeometry(15, 15, 30, 30)
-        self.name_ico.setPixmap(picture(f'_{_state["ico"]}'))
+        self.name_ico.setPixmap(picture(f'_{data["ico"]}'))
         self.file_name.setFont(QFont("細明體", 12))
         self.file_name.adjustSize()
         self.file_name.move(55, int((56 - self.file_name.height()) / 2))
@@ -289,32 +298,35 @@ class MQtext2(MQtext):
 
 
 class MQList(QFrame):
-    def __init__(self, state, lock, wait, waitlock, text, parent=None):
+    def __init__(
+            self, state: dict[str, any], lock: Lock, wait: list[str, ...], waitlock: Lock,
+            setindex: Callable[[int], None], parent: QObject
+    ) -> None:
         super().__init__(parent)
         # 共用數據
-        self.state = state
+        self.state: dict[str, any] = state
         # 數據鎖
-        self.lock = lock
+        self.lock: Lock = lock
         # 準備下載列表
-        self.wait = wait
+        self.wait: list[str, ...] = wait
         # 準備下載列表鎖
-        self.waitlock = waitlock
+        self.waitlock: Lock = waitlock
         # 顯示所有數量
-        self.text = text
+        self.setindex: Callable[[int], None] = setindex
         # 所有Qtext
-        self.allqtext = []
+        self.allqtext: list[QObject, ...] = []
         # 排隊列表
-        self.queuelist = []
+        self.queuelist: list[QObject, ...] = []
         # 正在傳輸列表
-        self.transmissionlist = []
+        self.transmissionlist: list[QObject, ...] = []
         # 暫停列表
-        self.pauselist = []
+        self.pauselist: list[QObject, ...] = []
         # 全部傳輸總量
-        self.allsize = 0
+        self.allsize: int = 0
         # 目前傳輸大小
-        self.transmissionsize = 0
+        self.transmissionsize: int = 0
         # 設置 總進度條容器
-        self.progresscontents = QLabel(self)
+        self.progresscontents: QLabel = QLabel(self)
         self.progresscontents.setObjectName('progresscontents')
         self.progresscontents.setStyleSheet(
             '#progresscontents{border-style:solid; border-bottom-width:1px;'
@@ -323,7 +335,7 @@ class MQList(QFrame):
         # 預設 隱藏 總進度條容器
         self.progresscontents.hide()
         # 設置 下載總進度 文字
-        self.name = QLabel(self.progresscontents)
+        self.name: QLabel = QLabel(self.progresscontents)
         # 設置文字
         self.name.setText('下載總進度')
         # 設置文字顏色
@@ -342,17 +354,17 @@ class MQList(QFrame):
         # 設置進度條%數文字置中
         self.progressbar.setAlignment(Qt.AlignCenter)
         # 設置按鈕容器
-        self.buttons = QLabel(self.progresscontents)
+        self.buttons: QLabel = QLabel(self.progresscontents)
         # 設置全部開始按鈕
-        self.stop = MyQLabel('全部開始', (0, 0, 80, 24), qss=3, fontsize=12, clicked=self.allstop, parent=self.buttons)
+        self.stopbutton: MyQLabel = MyQLabel('全部開始', (0, 0, 80, 24), qss=3, fontsize=12, clicked=self.allstop, parent=self.buttons)
         # 默認全部開始按鈕關閉
-        self.stop.setEnabled(False)
+        self.stopbutton.setEnabled(False)
         # 設置全部暫停按鈕
-        self.pause = MyQLabel('全部暫停', (88, 0, 80, 24), qss=3, fontsize=12, clicked=self.allpause, parent=self.buttons)
+        self.pausebutton: MyQLabel = MyQLabel('全部暫停', (88, 0, 80, 24), qss=3, fontsize=12, clicked=self.allpause, parent=self.buttons)
         # 設置全部取消按鈕
         MyQLabel('全部取消', (176, 0, 80, 24), qss=3, clicked=self.allclose, fontsize=12, parent=self.buttons)
         # 設置滾動區
-        self.scrollarea = ScrollArea(self)
+        self.scrollarea: ScrollArea = ScrollArea(self)
         # 獲取滾動內容窗口
         self.scrollcontents = self.scrollarea.scrollcontents
         # 關閉橫滾動條
@@ -364,28 +376,28 @@ class MQList(QFrame):
         )
 
     # 全部開始
-    def allstop(self):
-        for qtext in self.pauselist:
+    def allstop(self) -> None:
+        for qtext in self.pauselist.copy():
             qtext.set_restore.left_click.emit(qtext)
 
     # 全部暫停
-    def allpause(self):
-        for qtext in self.transmissionlist + self.queuelist:
+    def allpause(self) -> None:
+        for qtext in self.transmissionlist.copy() + self.queuelist.copy():
             qtext.set_pause.left_click.emit(qtext)
 
     # 全部取消
-    def allclose(self):
+    def allclose(self) -> None:
         for qtext in self.allqtext.copy():
             qtext.set_closes.left_click.emit(qtext)
 
     # 設置目前傳輸大小
-    def settransmissionsize(self, size):
+    def settransmissionsize(self, size: int) -> None:
         self.transmissionsize += size
         if self.progressbar.value() != (size := int(self.transmissionsize / self.allsize * 100)):
             self.progressbar.setValue(size)
 
     # qtext切換狀態回調
-    def toggle(self, qtext, value):
+    def toggle(self, qtext: QObject, value: bool) -> None:
         # 如果是 恢復下載 and qtxt 在暫停列表內 則刪除 暫停列表內的 qtext
         if value and qtext in self.pauselist:
             # 刪除 暫停列表內的 qtext
@@ -406,26 +418,26 @@ class MQList(QFrame):
         self.setbutton(value)
 
     # 設置進度條按鈕狀態
-    def setbutton(self, value):
-        if not self.stop.isEnabled() and self.pauselist and not value:
-            self.stop.setEnabled(True)
-        elif self.stop.isEnabled() and not self.pauselist and not self.queuelist:
-            self.stop.setEnabled(False)
-        if not self.pause.isEnabled() and self.transmissionlist and value:
-            self.pause.setEnabled(True)
-        elif self.pause.isEnabled() and not self.transmissionlist and not self.queuelist:
-            self.pause.setEnabled(False)
+    def setbutton(self, value: bool) -> None:
+        if not self.stopbutton.isEnabled() and self.pauselist and not value:
+            self.stopbutton.setEnabled(True)
+        elif self.stopbutton.isEnabled() and not self.pauselist and not self.queuelist:
+            self.stopbutton.setEnabled(False)
+        if not self.pausebutton.isEnabled() and self.transmissionlist and value:
+            self.pausebutton.setEnabled(True)
+        elif self.pausebutton.isEnabled() and not self.transmissionlist and not self.queuelist:
+            self.pausebutton.setEnabled(False)
 
-    def _add(self, state, uuid, qtext, value):
+    def _add(self, data: dict[str, any], uuid: str, qtext: QObject, value: bool) -> None:
         with self.lock:
-            self.state.update({uuid: state})
-        if 'length' in state:
+            self.state.update({uuid: data})
+        if 'length' in data:
             # 設置全部下載總量
-            self.allsize += state['length']
+            self.allsize += data['length']
             # 查看目前傳輸是否 已有傳輸
-            if 'size' in state and state['size']:
+            if 'size' in data and data['size']:
                 # 重新設置進度條
-                self.settransmissionsize(state['size'])
+                self.settransmissionsize(data['size'])
         count = len(self.allqtext)
         qtext.end.connect(self.end)
         # 連接 qtext 切換信號
@@ -438,7 +450,7 @@ class MQList(QFrame):
             self.queuelist.append(qtext)
         else:
             qtext.set_switch(False)
-        self.text(count + 1)
+        self.setindex(count + 1)
         # 查看進度條容器是否隱藏  如果隱藏則顯示
         if not self.progresscontents.isVisible():
             # 顯示進度條容器
@@ -446,7 +458,8 @@ class MQList(QFrame):
             # 重新設定大小布局
             self.resize(self.size() - QSize(1, 1))
 
-    def end(self, qtext):
+    # 關閉事件
+    def end(self, qtext: QObject) -> None:
         state = self.state[qtext.uuid]
         if 'state' in state:
             if state['state'] == 'close':
@@ -462,7 +475,7 @@ class MQList(QFrame):
             self.transmissionlist.remove(qtext)
         elif qtext in self.queuelist:
             self.queuelist.remove(qtext)
-        self.text(len(self.allqtext))
+        self.setindex(len(self.allqtext))
         qtext.setParent(None)
         qtext.deleteLater()
 
@@ -481,22 +494,25 @@ class MQList(QFrame):
             # 進度條容器隱藏
             self.progresscontents.hide()
             # 全部開始按鈕初始化
-            self.stop.setEnabled(False)
+            self.stopbutton.setEnabled(False)
             # 全部暫停按鈕初始化
-            self.pause.setEnabled(True)
+            self.pausebutton.setEnabled(True)
             # 重新設定大小布局
             self.resize(self.size() - QSize(1, 1))
 
         with self.lock:
             del self.state[qtext.uuid]
 
-    def complete(self, qtext, state):
+    # 完成任務回調
+    def complete(self, qtext: QObject, state) -> None:
         pass
 
-    def close(self, qtext, state):
+    # 關閉任務回調
+    def close(self, qtext, state) -> None:
         pass
 
-    def resizeEvent(self, event):
+    # 調整大小事件
+    def resizeEvent(self, event: QResizeEvent) -> None:
         y = 35 if self.allqtext else 0
         self.scrollarea.setGeometry(0, y, self.width(), self.height() - y)
         self.scrollcontents.setGeometry(0, 0, self.width() - 2, self.scrollcontents.height())
@@ -560,75 +576,84 @@ class MyQLabel(QPushButton):
             self.clicked.connect(clicked)
 
 
+class SearchButton(QPushButton):
+    def __init__(self, parent=None) -> None:
+        QPushButton.__init__(self, parent)
+        # 設置成可切換按鈕
+        self.setCheckable(True)
+        # 設置成自動排他按鈕
+        self.setAutoExclusive(True)
+        self.setStyleSheet(
+            'SearchButton{background-color:rgb(249, 250, 251); border-style:solid;border-left-width: 5px;'
+            'border-color: rgb(255, 255, 255)}'
+            'SearchButton:on{background-color:rgb(234, 246, 253); border-color: rgb(6, 163, 248)}'
+            'SearchButton:hover:!on{background-color:rgb(234, 246, 253); border-color: rgb(234, 246, 253)}'
+        )
+        # 設置 測邊框 大小
+        self.resize(165, 38)
+
+
 # 側邊框
-class Sidebar(QWidget):
-    left_click = pyqtSignal(QWidget)
+class Sidebar(QPushButton):
 
-    def __init__(self, text, ico_1, ico_2, move=None, click=None, parent=None):
+    def __init__(
+            self, text: str, ico_1: str, ico_2: str,
+            move: tuple[int, ...], window: QObject, parent: QObject
+    ) -> None:
         super().__init__(parent)
-        self.setAutoFillBackground(True)
-        self.ico_1 = ico_1
-        self.ico_2 = ico_2
-
-        self.check = False
-
+        # 設置未點擊圖標
+        self.ico_1: QPixmap = picture(ico_1)
+        # 設置以點擊圖標
+        self.ico_2: QPixmap = picture(ico_2)
         # 獲取字體
         font = QFont()
         # 設置字體大小
         font.setPointSize(10)
-
-        self.text = QLabel(self)
+        # 設置 側邊框文字 容器
+        self.text: QLabel = QLabel(self)
+        # 設置 側邊框 位置
         self.text.move(55, 12)
+        # 設置 側邊框 文字
         self.text.setText(text)
+        # 設置 側邊框 字體
         self.text.setFont(font)
+        # 設置 側邊框 自動調整大小
         self.text.adjustSize()
-        self.index = QLabel(self)
+        # 設置 側邊框 目前數量 容器
+        self.index: QLabel = QLabel(self)
+        # 設置 側邊框 目前數量 位置
         self.index.move(self.text.x() + self.text.width() + 5, 12)
+        # 設置 側邊框 目前數量 字體
         self.index.setFont(font)
+        # 設置 側邊框 圖案 容器
         self.ico = QLabel(self)
+        # 設置 側邊框 圖案 位置
         self.ico.move(31, 13)
-        self.ico.setPixmap(picture(ico_1))
-
-        self.setPalette(backdrop('小淺藍色'))
-        self.resize(165, 38)
-        self.frame = QLabel(self)
-        self.frame.setStyleSheet('background-color:rgb(6, 163, 248)')
-        self.frame.resize(5, 38)
-        self.frame.hide()
+        # 設置 側邊框 圖案
+        self.ico.setPixmap(self.ico_1)
         # 是否設定大小
-        if move:
-            self.move(*move)
-        # 是否設定左鍵點擊事件
-        if click:
-            self.left_click.connect(click)
+        self.move(*move)
+        # 設置成可切換按鈕
+        self.setCheckable(True)
+        # 設置成自動排他按鈕
+        self.setAutoExclusive(True)
+        # 連接切換圖標事件
+        self.toggled.connect(
+            lambda visible: self.ico.setPixmap(self.ico_2) if visible else self.ico.setPixmap(self.ico_1)
+        )
+        # 連切置頂窗口事件
+        self.toggled.connect(lambda visible: window.raise_() if visible else '')
 
-    # 鼠標移出label
-    def leaveEvent(self, event):
-        if not self.check:
-            self.setPalette(backdrop('小淺藍色'))
+        # 設置 側邊框 qss
+        self.setStyleSheet(
+            'QPushButton{background-color:rgb(249, 250, 251); border-style:solid;border-left-width: 5px;'
+            'border-color: rgb(255, 255, 255)}'
+            'QPushButton:on{background-color:rgb(234, 246, 253); border-color: rgb(6, 163, 248)}'
+            'QPushButton:hover:!on{background-color:rgb(234, 246, 253); border-color: rgb(234, 246, 253)}'
+        )
 
-    # 鼠標移入label
-    def enterEvent(self, event):
-        if not self.check:
-            self.setPalette(backdrop('中淺藍色'))
-
-    # 單擊
-    def mousePressEvent(self, event):
-        # 左鍵
-        if event.buttons() == Qt.LeftButton:
-            self.left_click.emit(self)
-
-    # 設定選中狀態
-    def select(self, _bool):
-        self.check = _bool
-        if _bool:
-            self.frame.show()
-            self.setPalette(backdrop('大淺藍色'))
-            self.ico.setPixmap(picture(self.ico_2))
-        else:
-            self.frame.hide()
-            self.setPalette(backdrop('小淺藍色'))
-            self.ico.setPixmap(picture(self.ico_1))
+        # 設置 測邊框 大小
+        self.resize(165, 38)
 
 
 class Direction(Enum):
@@ -646,7 +671,6 @@ class Direction(Enum):
 class Window(QWidget):
     def __init__(self, titlelabel, height, tracking=True, parent=None):
         super().__init__(parent)
-
         # 陰影大小
         self.padding = 13
         # 紀錄原本大小
@@ -931,7 +955,7 @@ class Window(QWidget):
         self.content_widget.resize(self.shadow_widget.width(), self.shadow_widget.height() - self.titlelabel.height())
 
 
-class set_state:
+class setstate:
     def __init__(self, state, data):
         self.state = state
         self._state = state[data]
@@ -942,3 +966,21 @@ class set_state:
 
     def __exit__(self, type, value, traceback):
         self.state[self.data] = self._state
+
+
+class AllPath(TypedDict):
+    data: dict[int, list[TextSave, ...]]
+    path: list[tuple[str, str], ...]
+    index: dict[str, dict[str, any]]
+    refresh: bool
+    count: int
+    page: int
+
+
+class AllNPath(TypedDict):
+    data: dict[int, list[NTextSave, ...]]
+    path: list[tuple[str, str], ...]
+    index: dict[str, dict[str, any]]
+    refresh: bool
+    count: int
+    page: int

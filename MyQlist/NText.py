@@ -1,227 +1,268 @@
-from .package import picture, MyQLabel, QFont, QLabel, QCursor, QMenu, Qt
+from .module import MyTextSave, QApplication, Optional, Callable, QFontMetrics, picture, MyQLabel, MyQFrame, QFont, QLabel, QCursor, Qt
+if False:
+    from NList import NList
 
 
-class MyLText(MyQLabel):
-    def __init__(self, parent, size=15):
-        super().__init__(parent)
+class Text(MyQFrame):
+    def __init__(self, nlist: 'NList', index: int) -> None:
+        super().__init__(nlist.scrollcontents)
+        self.nlist: NList = nlist
+        # 自身編號
+        self.index = index
+        # 點擊狀態
+        self.state: bool = False
+        # 設定按鍵發射
+        self.slot: MyQFrame = self
+        # text圖標
+        self.icoimage: QLabel = QLabel(self)
+        # text圖標 隱藏
+        self.icoimage.hide()
         # 獲取字體設置
-        font = QFont()
+        font: QFont = QFont()
         # 設置字體大小
-        font.setPointSize(size)
-        # 設定標題字體大小
-        self.setFont(font)
-
-
-class Text(MyQLabel):
-    def __init__(self, text=None, listcheck=None, data=None, ico=None, my_mode=None, text_mode=None):
-        super().__init__(None)
+        font.setPointSize(15)
+        # 設置子text
+        self.text: MyText = MyText(self)
+        # 設置 子text y座標 位置
+        self.text.move(0, int((self.nlist.textmax - QFontMetrics(font).height()) / 2))
+        # 紀錄text圖標文字
+        self._ico: str = ''
+        # 紀錄 背景左鍵 點擊信號
+        self._leftclick: list[Callable, ...] = []
+        # 紀錄 背景左鍵 雙擊信號
+        self._doubleclick: list[Callable, ...] = []
+        # 記錄額外資料
+        self.data: any = None
+        # 設置右鍵策略
+        self.setContextMenuPolicy(Qt.CustomContextMenu)
+        # 設置右鍵連接事件
+        self.customContextMenuRequested.connect(self.display)
+        # 設定選中狀態qss屬性
+        self.setProperty('state', False)
+        # 設置 qss
         self.setStyleSheet(
             'Text{background-color: white}'
             'Text:hover{background-color: rgb(249, 250, 251)}'
-            'Text[status="true"]{background-color: rgb(234, 246, 253)}'
+            'Text[state="true"]{background-color: rgb(234, 246, 253)}'
         )
-        self.listcheck = listcheck
-        # 設定選中狀態qss屬性
-        self.setProperty('status', False)
-        # 設定按鍵發射
-        self.slot = self
-        # 點擊狀態
-        self.status = False
-        # text圖標
-        self.textico = None
-        # 右鍵
-        self.contextMenu = None
-        # 記錄額外資料
-        self.data = data
-        # 設定 text
-        self.text_ = MyLText(self)
-        # 設定 text 文字
-        self.text_.setText(text)
-        # 判斷是否需要設定圖標
-        if ico:
-            # 獲取相應圖標
-            _ico = picture(ico)
-            # 設定圖標
-            self.textico = QLabel(self)
-            # 設定圖標圖片
-            self.textico.setPixmap(_ico)
-            # 設置圖標大小
-            self.textico.resize(_ico.size())
-            # 設置圖標位置
-            self.textico.move(
-                10, int((self.listcheck.textmax - self.textico.height()) / 2)
-            )
-        # 獲取 text x位置
-        x = (self.textico.x() + self.textico.width()) if self.textico else 0
-        # 獲取 text y位置
-        y = int((self.listcheck.textmax - self.text_.fontMetrics().height()) / 2)
-        # 設定 text 位置
-        self.text_.move(x + 10, y)
-        # 設定 text 大小
-        self.text_.resize(
-            self.text_.fontMetrics().horizontalAdvance(text),
-            self.text_.fontMetrics().height())
 
-        if my_mode:
-            # 查看 自身 是否需要設定單擊信號
-            if 'leftclick' in my_mode:
-                for mode in my_mode['leftclick']:
-                    # 連接自身左鍵點擊信號
-                    self.leftclick.connect(mode)
-            # 查看 自身 是否需要設定雙擊信號
-            if 'doubleclick' in my_mode:
-                for mode in my_mode['doubleclick']:
-                    # 連接自身左鍵雙擊信號
-                    self.doubleclick.connect(mode)
-            if 'cursor' in my_mode:
-                self.setCursor(Qt.PointingHandCursor)
-        if text_mode:
-            # 查看 自身 是否需要設定單擊信號
-            if 'leftclick' in text_mode:
-                for mode in text_mode['leftclick']:
-                    self.text_.leftclick.connect(mode)
-            # 查看 text 是否需要設定標題 顏色
-            if 'color' in text_mode:
-                # 設定QSS 預設顏色 移動到上方顏色
-                self.text_.setStyleSheet(
-                    f'MyLText{{color: rgb{text_mode["color"][0]}}}'
-                    f'MyLText:hover{{color: rgb{text_mode["color"][1]}}}'
-                )
-            if 'cursor' in my_mode:
-                self.text_.setCursor(Qt.PointingHandCursor)
-
-    # 右鍵菜單事件
-    def menuclick(self, text, slot, mode=True):
-        # 在右鍵位置顯示
-        def display():
-            if self.listcheck.menu_callback:
-                self.listcheck.menu_callback(lambda: self.contextMenu.popup(QCursor.pos()))
+    # 右鍵事件
+    def display(self):
+        if self.nlist.menu:
+            if self.nlist.menu_callback:
+                self.nlist.menu_callback(lambda: self.listcheck.contextmenu.popup(QCursor.pos()))
             else:
-                self.contextMenu.popup(QCursor.pos())
-            # for _, values in self.listcheck.menu.items():
-            # 	for _, _values in values.items():
-            # 		if _values.isVisible():
-            # 			self.contextMenu.popup(QCursor.pos())
-            # 			return
+                self.nlist.contextmenu.popup(QCursor.pos())
 
-        # 如果沒有QMenu信號事件 創建QMenu信號事件
-        if self.contextMenu is None:
-            self.setContextMenuPolicy(Qt.CustomContextMenu)
-            self.customContextMenuRequested.connect(display)
-            self.contextMenu = QMenu(self)
+    # 重新設定子texts資料
+    def refresh(self):
+        save = self.nlist.textsave[self.index]
+        self.data = save['data']
+        if save['ico'] and self._ico != save['ico']:
+            # 獲取相應圖標
+            ico = picture(save['ico'])
+            # 保存目前的圖標文字
+            self._ico = save['ico']
+            # 設定圖標圖片
+            self.icoimage.setPixmap(ico)
+            # 設置圖標大小
+            self.icoimage.resize(ico.size())
+            # 設置圖標位置
+            self.icoimage.move(
+                10, int((self.nlist.textmax - self.icoimage.height()) / 2)
+            )
+            # 圖標顯示
+            self.icoimage.show()
 
-        cp = self.contextMenu.addAction(text)
-        cp.triggered.connect(slot)
-        cp.setVisible(mode)
-        if self not in self.listcheck.menu:
-            self.listcheck.menu[self.listcheck.page][self] = {text: cp}
-        else:
-            self.listcheck.menu[self.listcheck.page][self].update({text: cp})
+            self.text.move(self.icoimage.x() + self.icoimage.width() + 10, self.text.y())
 
-    # 更改大小事件
-    def resizeEvent(self, e):
-        pass
+        elif save['ico'] is None and self.icoimage.isVisible():
+            self._ico = None
+            self.icoimage.hide()
+            self.text.move(0, self.text.y())
+
+        # 查看目前是否有左鍵點擊信號 如果有 則全部解除
+        if self._leftclick:
+            # 全部解除 左鍵點擊信號
+            self.leftclick.disconnect()
+            # 全部刪除 左鍵點擊信號
+            self._leftclick.clear()
+        # 查看目前是否有左鍵雙擊信號 如果有 則全部解除
+        if self._doubleclick:
+            # 全部解除 左鍵雙擊信號
+            self.doubleclick.disconnect()
+            # 全部刪除 左鍵雙擊信號
+            self._doubleclick.clear()
+
+        if save['leftclick']:
+            # 連接 新的 左鍵點擊信號
+            for slot in save['leftclick']:
+                self.leftclick.connect(slot)
+                self._leftclick.append(slot)
+        if save['doubleclick']:
+            # 連接 新的 左鍵雙擊信號
+            for slot in save['doubleclick']:
+                self.doubleclick.connect(slot)
+                self._doubleclick.append(slot)
+
+        self.text.refresh(save['text'])
+        self.text.adjustSize()
+
+
+class MyText(MyQLabel):
+    def __init__(self, parent: Text):
+        super().__init__(parent)
+        # 保存 自身 數據
+        self.data: MyTextSave = {'text': '', 'leftclick': None, 'color': None}
+        # 紀錄 子text 左鍵點擊信號
+        self._leftclick: list[Callable, ...] = []
+        # 紀錄 子text qss滑動到上方顏色
+        self._color: Optional[tuple[tuple[int, int, int], tuple[int, int, int]]] = None
+        # 獲取字體設置
+        font: QFont = QFont()
+        # 設置字體大小
+        font.setPointSize(15)
+        # 設定標題字體大小
+        self.setFont(font)
+
+    def refresh(self, data: MyTextSave) -> None:
+        # 設置text
+        self.setText(data['text'])
+        # 查看目前是否有左鍵點擊信號 如果有 則全部解除
+        if self._leftclick:
+            # 全部解除 左鍵點擊信號
+            self.leftclick.disconnect()
+            # 清空 左鍵信號
+            self._leftclick.clear()
+            # 如果沒有點擊信號
+            if not data['leftclick']:
+                # 滑鼠還原
+                self.setCursor(Qt.ArrowCursor)
+        if data['leftclick']:
+            # 連接 新的 左鍵點擊信號
+            for slot in data['leftclick']:
+                self.leftclick.connect(slot)
+                self._leftclick.append(slot)
+            # 滑鼠設定成可點擊圖標
+            self.setCursor(Qt.PointingHandCursor)
+
+        if self.data['color'] != data['color'] and data['color']:
+            # 設置text 預設顏色 滑動到上方顏色
+            self.setStyleSheet(
+                f'MyText{{color: rgb{data["color"][0]}}}'
+                f'MyText:hover{{color: rgb{data["color"][1]}}}'
+            )
+        elif self.data['color'] and data['color'] is None:
+            self.setStyleSheet('')
+        # 更新數據
+        self.data.update(**data)
 
 
 class QText:
-    def __init__(self, listcheck):
-        self.listcheck = listcheck
+    def __init__(self, nlist: 'NList') -> None:
+        self.nlist: NList = nlist
 
-    # 添加一個列表 *args 文字列表 data 額外資料 ico 圖標 mode 文字點擊事件 顏色 設定
-    def add(self, text, index=None, data=None, ico=None, my_mode=None, text_mode=None):
-        if index:
-            category = 1
-        else:
-            category = 0
-        self._create(text, index=index, category=category, data=data, ico=ico, my_mode=my_mode, text_mode=text_mode)
-
-    # 插入一個列表
-    def insert(self, index, text, data=None, ico=None, my_mode=None, text_mode=None):
-        self._create(text, category=2, index=index, data=data, ico=ico, my_mode=my_mode, text_mode=text_mode)
-
-    def _create(self, text, category, index=None, data=None, ico=None, my_mode=None, text_mode=None):
-        # 新增texts
-        texts = Text(
-            text, listcheck=self.listcheck, data=data, ico=ico, my_mode=my_mode, text_mode=text_mode
-        )
-        # 查看是否需要新增
-        if category == 0:
-            page = 0
-            for page in range(len(self.listcheck.alllist)):
-                if len(self.listcheck.alllist[page]) + 1 <= self.listcheck.pagemax:
-                    break
-
-            if len(self.listcheck.alllist[page]) + 1 > self.listcheck.pagemax:
-                self.listcheck.quantity.add()
-                page += 1
-            texts.setParent(self.listcheck.scrollcontents[page])
+        for index in range(self.nlist.pagemax):
+            text = Text(self.nlist, index)
             # 設置位置
-            texts.setGeometry(
-                0, len(self.listcheck.alllist[page]) * self.listcheck.textmax,
-                self.listcheck.scrollcontents[page].width(), self.listcheck.textmax
+            text.setGeometry(
+                0, len(self.nlist.textlist) * self.nlist.textmax,
+                self.nlist.scrollcontents.width(), self.nlist.textmax
             )
-            # 添加新label
-            self.listcheck.alllist[page].append(texts)
-            index = page
-        # 查看是否需要從 page頁 開始新增
-        elif category == 1:
-            page = len(self.listcheck.alllist) - 1
-            for page in range(index, len(self.listcheck.alllist)):
-                if len(self.listcheck.alllist[page]) < self.listcheck.pagemax:
-                    break
-            if len(self.listcheck.alllist[page]) > self.listcheck.pagemax:
-                self.listcheck.quantity.add()
-                page += 1
-            texts.setParent(self.listcheck.scrollcontents[page])
-            # 設置位置
-            texts.setGeometry(
-                0, len(self.listcheck.alllist[page]) * self.listcheck.textmax,
-                self.listcheck.scrollcontents[page].width(), self.listcheck.textmax
-            )
-            # 添加新label
-            self.listcheck.alllist[page].append(texts)
-    
-        # 查看是否需要插入
-        elif category == 2:
-            insert_index = index // self.listcheck.pagemax
-            _insert_index = index % self.listcheck.pagemax
-            if insert_index + 1 > len(self.listcheck.alllist):
-                self._create(texts, index=insert_index, category=1, data=data, ico=ico, my_mode=my_mode,
-                             text_mode=text_mode)
-                return
-    
-            while 1:
-                texts.setParent(self.listcheck.scrollcontents[insert_index])
-                alllist = self.listcheck.alllist[insert_index]
-                alllist.insert(_insert_index, texts)
-                for _texts, _index in zip(alllist, range(len(alllist))):
-                    _texts.setGeometry(
-                        0, _index * self.listcheck.textmax,
-                        self.listcheck.scrollcontents[insert_index].width(), self.listcheck.textmax
-                    )
-                if len(self.listcheck.alllist[insert_index]) > self.listcheck.pagemax:
-                    texts = self.listcheck.alllist[insert_index].pop()
-                    _insert_index = 0
-                    insert_index += 1
-                    if insert_index > len(self.listcheck.alllist) - 1:
-                        self.listcheck.quantity.add()
-                else:
-                    break
-        # texts顯示
-        texts.show()
-    
-        # 初始化點擊事件
-        for slot in self.listcheck.click_connect:
-            if slot[0] == 'texts':
-                getattr(texts, slot[1]).connect(slot[2])
-            elif slot[0] == 'menu':
-                getattr(texts, slot[1])(slot[2], slot[3])
-        if self.listcheck.page != index:
+            self.nlist.textlist.append(text)
+            # text顯示
+            text.show()
+
+    # 複選紐左鍵點擊事件
+    def _vbox_left_select(self, text: Text) -> None:
+        # 點著shift事件
+        if QApplication.keyboardModifiers() == Qt.ShiftModifier:
+            self._shift(text)
             return
-        self.listcheck.quantity.all(len(self.listcheck.alllist[self.listcheck.page]))
-        # 設置內容容器大小
-        self.listcheck.scrollcontents[self.listcheck.page].resize(
-            self.listcheck.scrollcontents[self.listcheck.page].width(),
-            len(self.listcheck.alllist[self.listcheck.page]) * self.listcheck.textmax
-        )
+        # 設定成最後一次點擊
+        self.nlist.firstclick = text
+        text.setstate()
+
+    # 複選紐右擊點擊事件
+    def _vbox_right_select(self, text: Text) -> None:
+        # 設定成最後一次點擊
+        self.nlist.firstclick = text
+        text.setstate()
+
+    # texts左鍵單擊點擊事件
+    def _text_left_select(self, text: Text) -> None:
+        # CTRL事件
+        if QApplication.keyboardModifiers() == Qt.ControlModifier:
+            self._vbox_left_select(text)
+            return
+        # SHIFT事件
+        if QApplication.keyboardModifiers() == Qt.ShiftModifier:
+            self._shift(text)
+        else:
+            self._radio(text)
+
+    # label右擊點擊事件
+    def _text_right_select(self, text: Text) -> None:
+        if text.state:
+            return
+        # CTRL事件
+        if QApplication.keyboardModifiers() == Qt.ControlModifier:
+            self._vbox_left_select(text)
+            return
+        # SHIFT事件
+        if QApplication.keyboardModifiers() == Qt.ShiftModifier:
+            self._shift(text)
+        else:
+            self._radio(text)
+
+    # 單獨選一個
+    def _radio(self, text: Text) -> None:
+        self.nlist.firstclick = text
+        # 獲得已點擊複製
+        currentclick = self.nlist.currentclick.copy()
+        if text in currentclick:
+            currentclick.remove(text)
+        else:
+            text.setstate()
+        for _text in currentclick:
+            _text.setstate()
+
+    # shift事件
+    def _shift(self, text: Text) -> None:
+        # 獲取目前點擊的text 是在第幾個
+        index = self.nlist.textlist.index(text)
+        # 查看最後一次點擊 之前是否點擊過
+        if self.nlist.firstclick is not None:
+            _index = self.nlist.textlist.index(self.nlist.firstclick)
+            # 獲取目前點擊的 - 最後點擊 之間的數量
+            multiple_selection = index - _index
+            # 查看數量是否大於0
+            if multiple_selection > 0:
+                currently = self.nlist.textlist[_index:index + 1]
+            # 查看數量是否小於0
+            elif multiple_selection < 0:
+                currently = self.nlist.textlist[index:_index + 1]
+            # 如果等於0進入點擊
+            else:
+                # 進入單獨點擊
+                self._radio(text)
+                return
+            # 獲取目前所有以點擊的複製
+            currentclick = self.nlist.currentclick.copy()
+            # 循環舊的所有text 複製
+            for text in currentclick:
+                # 查看 index 是否在新典籍範圍之內
+                if text in currently:
+                    # 在點擊範圍之內 就移除新點擊範圍的 index 不需要重新設定複選紐
+                    currently.remove(text)
+                else:
+                    # 在點擊範圍之外 設定成空複選紐
+                    text.setstate()
+            # 循環新的所有texts點擊
+            for text in currently:
+                # 設定成選中複選紐
+                text.setstate()
+        else:
+            self.nlist.firstclick = text
+            self._radio(text)
 

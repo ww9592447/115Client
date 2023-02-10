@@ -1,6 +1,5 @@
 import time
 from module import srequests
-from asyncio import sleep
 
 
 class Directory:
@@ -143,6 +142,8 @@ class Directory:
             for index, _url in zip(range(len(url)), url):
                 form_data.update({f'url[{index}]': _url})
             result = await srequests.async_post(self.offlineurl + 's', headers=self.headers, data=form_data)
+            print(result)
+            print(result.text)
         try:
             return result.json()
         except:

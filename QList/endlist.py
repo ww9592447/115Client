@@ -52,7 +52,7 @@ class Qtest(QFrame):
     def open_folder(self):
         if self.cid:
             self.sidebar_1()
-            create_task(self.network(cid=self.cid, pages=True))
+            create_task(self.network(self.cid))
         elif exists(self.path):
             popen(f'explorer.exe /select, {self.path}')
 
@@ -85,7 +85,7 @@ class EndList(QFrame):
         self.allqtest = []
         # 選擇首頁窗口
         self.sidebar_1 = sidebar_1
-        # 前進cid
+        # 網路
         self.network = network
         # 設定完成數量
         self.text = text

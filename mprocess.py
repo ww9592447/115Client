@@ -1,42 +1,50 @@
-from module import create_task, get_event_loop, sleep
+from module import create_task, get_event_loop, sleep, Value, Lock, ConfigParser
 from API.download115 import Download115
 from API.upload115 import Upload115
+from API.directory import Directory
 from Task.download import Download
 from Task.upload import Upload
 from Task.sha1 import GetSha1
 
 
 class Mprocess:
-    def __init__(self, state, lock, wait, wait_lock, closes, directory, config):
+    def __init__(
+            self,
+            state: dict[str, any],
+            lock: Lock,
+            wait: list[str, ...],
+            wait_lock: Lock,
+            closes: Value,
+            directory: Directory,
+            config: ConfigParser
+    ) -> None:
         # 共享數據
-        self.state = state
+        self.state: dict[str, any] = state
         # 共享數據鎖
-        self.lock = lock
+        self.lock: Lock = lock
         # 傳送列表
-        self.wait = wait
+        self.wait: list[str, ...] = wait
         # 傳送列表鎖
-        self.wait_lock = wait_lock
+        self.wait_lock: Lock = wait_lock
         # 115API
-        self.directory = directory
+        self.directory: Directory = directory
         # 關閉信號
-        self.closes = closes
+        self.closes: Value = closes
         # 下載API
-        self.download115 = Download115(config)
+        self.download115: Download115 = Download115(config)
         # 下載任務
-        self.download = Download(self.download115, state, lock, closes, config)
+        self.download: Download = Download(self.download115, state, lock, config)
         # 上傳API
-        self.upload115 = Upload115(config)
+        self.upload115: Upload115 = Upload115(config)
         # 上傳任務
-        self.upload = Upload(self.upload115, state, lock, closes, self.directory, config)
+        self.upload = Upload(self.upload115, state, lock, self.directory, config)
         # sha1任務
         self.sha1 = GetSha1(self.state, self.lock)
-        # 用戶資料
-        self.config = config
-        self.loop = get_event_loop()
+        self.loop: get_event_loop = get_event_loop()
         self.loop.run_until_complete(self.stop())
 
     # 檢查傳送列表
-    async def stop(self):
+    async def stop(self) -> None:
         while 1:
             if self.closes.value:
                 return

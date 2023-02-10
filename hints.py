@@ -1,16 +1,17 @@
-from module import picture, QLabel, Window, QFont, QFrame, sleep, QLineEdit, \
+from module import picture, QLabel, Window, QFont, QFrame, sleep, QLineEdit, gif, Optional, Callable, \
     TextQLabel, QTextEdit, MyIco, MyQLabel, ListDirectory, time, create_task, get_ico, \
-    splitext, math, QFileDialog, basename, QListView, QTreeView, QAbstractItemView, QDialogButtonBox
-from MyQlist.package import gif
+    splitext, math, QFileDialog, basename, QListView, QTreeView, QAbstractItemView, QDialogButtonBox, \
+    MyTextSave, NTextSave, Union, AllNPath, QResizeEvent, QCloseEvent, QApplication, QObject, Qt
 import winsound
 import re
+from API.directory import Directory
 
 
 def error():
     def decorator(func):
         async def wrap(self=None, *args, state=True, **kwargs):
             while (result := await func(self, *args, **kwargs)) is False:
-                if not state or await myerror('網路錯誤', '請問是否重新嘗試') is False:
+                if state and await myerror('網路錯誤', '請問是否重新嘗試') is False:
                     break
             return result
         return wrap
@@ -36,10 +37,6 @@ class TitleLabel_2(QFrame):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.label = None
-        # self.label.setFont(QFont("細明體", 14))
-        # self.label.setGeometry(30, 25, 120, 30)
-        # self.label.setText('添加離線鏈結')
-        # self.label.show()
 
     def setdata(self, text, geometry):
         self.label = TextQLabel(text, fontsize=14, geometry=geometry, parent=self)
@@ -47,43 +44,51 @@ class TitleLabel_2(QFrame):
 
 
 class Error(Window):
-    def __init__(self, title, name):
+    def __init__(self, title, name) -> None:
         Window.__init__(self, TitleLabel_1, 30, tracking=False)
         self.titlelabel.label.setText(title)
         # 結果
-        self.result = None
-        # 灰色背景
+        self.result: Optional[bool] = None
+        # 灰色背景容器
         self.frame = QFrame(self.content_widget)
+        # 灰色背景qss
         self.frame.setStyleSheet('QFrame{background-color:rgb(240, 240, 240); border-bottom-style:solid;'
                                  ' border-top-width:1px; border-top-color: rgba(200, 200, 200, 175)}')
 
-        # 警告圖片
-        label = QLabel(self.content_widget)
+        # 設置警告容器
+        label: QLabel = QLabel(self.content_widget)
+        # 設置警告圖片
         label.setPixmap(picture('警告'))
+        # 設置警告圖片位置
         label.move(20, 10)
-
+        # 設置錯誤文字
         TextQLabel(name, fontsize=15, move=(60, 15), parent=self.content_widget)
+        # 設置 是 按鈕
+        MyQLabel('是', (27, 57, 75, 27), qss=2, clicked=lambda: self.end(True), fontsize=16, parent=self.content_widget)
+        # 設置 否 按鈕
+        MyQLabel('否', (132, 57, 75, 27), qss=2, clicked=lambda: self.end(False), fontsize=16, parent=self.content_widget)
         self.resize(260, 145)
 
-        MyQLabel('是', (27, 57, 75, 27), qss=2, clicked=lambda:self.end(True), fontsize=16, parent=self.content_widget)
-        MyQLabel('否', (132, 57, 75, 27), qss=2, clicked=lambda:self.end(False), fontsize=16, parent=self.content_widget)
-
-    def end(self, result):
+    # 關閉事件
+    def end(self, result: bool) -> None:
+        # 設置結果
         self.result = result
+        # 關閉
         self.close()
 
-    def resizeEvent(self, event):
+    # 調整大小事件
+    def resizeEvent(self, event: QResizeEvent) -> None:
         Window.resizeEvent(self, event)
         self.frame.setGeometry(0, self.content_widget.height() - 40, self.content_widget.width(), 40)
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self.result is None:
             self.result = False
         event.accept()
 
 
 class Enter(Window):
-    def __init__(self, title, name):
+    def __init__(self, title, name) -> None:
         Window.__init__(self, TitleLabel_1, 30, tracking=False)
         self.titlelabel.label.setText(title)
         # 結果
@@ -93,7 +98,7 @@ class Enter(Window):
 
         TextQLabel(name, fontsize=11, move=(11, 10), parent=self.content_widget)
 
-        self.text = QLineEdit(self.content_widget)
+        self.text: QLineEdit = QLineEdit(self.content_widget)
         self.text.move(11, 29)
         self.text.setStyleSheet('background-color: rgb(255, 255, 255);')
         self.text.resize(178, 20)
@@ -108,17 +113,17 @@ class Enter(Window):
          )
         self.resize(228, 146)
 
-    def end(self, result):
+    def end(self, result: bool) -> None:
         self.result = result
         self.close()
 
-    def closeEvent(self, event):
+    def closeEvent(self, event: QCloseEvent) -> None:
         if self.result is None:
             self.result = False
         event.accept()
 
 
-async def myerror(title, name):
+async def myerror(title, name) -> None:
     _error = Error(title, name)
     _error.show()
     winsound.PlaySound("SystemQuestion", winsound.SND_ASYNC)
@@ -128,7 +133,7 @@ async def myerror(title, name):
         await sleep(0.1)
 
 
-async def myenter(title, name):
+async def myenter(title, name) -> str:
     _enter = Enter(title, name)
     _enter.show()
     while 1:
@@ -137,29 +142,412 @@ async def myenter(title, name):
         await sleep(0.1)
 
 
+# 瀏覽窗口
+class FolderList(Window):
+    def __init__(self, directory: Directory):
+        super().__init__(TitleLabel_2, 75, tracking=False)
+        self.resize(700, 565)
+        # 所有目錄資料
+        self.allpath: dict[str, AllNPath] = {}
+        # 目錄操作
+        self.directory: Directory = directory
+        # 目前所在目錄
+        self.self_path_list: str = '0'
+        # 目前搜索cid
+        self.search_cid: str = ''
+        # 上一頁目錄順序
+        self.up_page_list: list[str, ...] = []
+        # 下一頁目錄順序
+        self.on_page_list: list[str, ...] = []
+        # 獲取瀏覽視窗
+        self.listdirectory = ListDirectory(False, self.content_widget)
+        self.listdirectory.setStyleSheet(
+            'NList{border-style:solid; border-bottom-width:1px; border-color:rgba(200, 200, 200, 125)}'
+        )
+        # 結果
+        self.result: Optional[tuple[str, str]] = None
+        # 設定重新整理回調
+        self.listdirectory.rectangle_connect(lambda: create_task(self.reorganize()))
+        # 設定搜索回調
+        self.listdirectory.linedit_connect(self._search_callback)
+        # 設定搜索全部回調
+        self.listdirectory.searchcontents.set_search_all_callback(self._set_search_all_callback)
+        # 設定搜索名稱回調
+        self.listdirectory.searchcontents.set_search_name_callback(self._set_search_name_callback)
+        # 設定頁數回調
+        self.listdirectory.page_callback = self.setpage
+        # 設定目錄點擊回調
+        self.listdirectory.directory_slot = lambda text: create_task(self.network(text.data))
+        # 設定上一頁回調
+        self.listdirectory.pgup_connect(self.up_page)
+        # 設定下一頁回調
+        self.listdirectory.pgon_connect(self.under_page)
+        # 設定右鍵回調
+        self.listdirectory.menu_callback = self.menu_callback
+        # 禁止橫滾動條出現
+        self.listdirectory.scrollarea.sethrizontal(False)
+        # 設置 背景空白 圓角邊框
+        self.setStyleSheet('#shadow_widget{background-color:rgb(255,255,255);border-radius:15px}')
+        # 設置確認按鈕
+        self.yesbutton: MyQLabel = MyQLabel(
+            '', (520, 411, 130, 40), clicked=self.end, qss=1, fontsize=16, parent=self.content_widget
+        )
+        # 設置 新增文件夾 按鈕
+        MyQLabel(
+            '新建資料夾', (20, 411, 130, 40), clicked=lambda: create_task(self.get_enter('新建資料夾')),
+            fontsize=16, parent=self.content_widget
+        )
+        # 設置 關閉按鈕
+        MyIco('黑色關閉', '藍色關閉', coordinate=(620, 35, 12, 12), state=True,
+              click=self.close, parent=self.shadow_widget)
+
+    async def stop(self, titletext: str, text: str, parent: QObject) -> tuple[str, str]:
+        # 初始化結果
+        self.result: Optional[tuple[str, str]] = None
+        # 初始化所有目錄資料
+        self.allpath.clear()
+        # 初始化目前所在目錄
+        self.self_path_list: str = '0'
+        # 初始化目前搜索cid
+        self.search_cid: str = ''
+        # 初始化上一頁目錄順序
+        self.up_page_list.clear()
+        # 初始化下一頁目錄順序
+        self.on_page_list.clear()
+        # 初始化所有介面的頁數資料
+        self.listdirectory.savecontents.clear()
+        # 設置標題名稱
+        self.titlelabel.setdata(titletext, (30, 25, 250, 30))
+        # 設置確定按鈕名稱
+        self.yesbutton.setText(text)
+        # 獲取桌面訊息
+        desktop = QApplication.desktop()
+        # 獲取自身所在螢幕座標
+        rect = desktop.screenGeometry(desktop.screenNumber(parent))
+        # 置中窗口
+        self.move(rect.left() + (rect.width() - self.width()) / 2, (rect.height() - self.height()) / 2)
+        # 顯示窗口
+        self.show()
+        create_task(self.network('0'))
+        while 1:
+            if self.result is not None:
+                return self.result
+            await sleep(0.1)
+
+    def end(self) -> None:
+        if self.self_path_list[0:3] != '搜索-':
+            self.result = self.self_path_list, self.allpath[self.self_path_list]["path"][-1][0]
+            self.close()
+
+    # 網路
+    async def network(self, cid: str, page: int = 1, action: Optional[Callable] = None, add: bool = True) -> None:
+        # 瀏覽目錄清空
+        self.listdirectory.directory_cls()
+        # 顯示等待動畫
+        self.listdirectory.set_load_visible(True)
+        # 查看cid是否是搜索
+        if cid[0:3] == '搜索-':
+            # 分割 cid 獲取資料
+            search = re.search('搜索-(.+)-(.+)-(.+)', cid).groups()
+            # 查看上一頁是不是搜索
+            #  上一頁不是搜索
+            if self.self_path_list[0:3] != '搜索-':
+                # 設定目前搜索 cid資料
+                self.search_cid = search
+                # 查看 搜索cid 是不是根目錄
+                if self.search_cid[0] != '0':
+                    # 設定搜索名稱按鈕
+                    self.listdirectory.searchcontents.setname(self.search_cid[1])
+            # 上一頁是搜索
+            else:
+                # 查看 搜索cid 是不是 根目錄 and 查看目前搜索名稱 是不是跟 上一頁 搜索名稱不一致
+                if search[0] != '0' and search[1] != self.listdirectory.searchcontents.search_name.text():
+                    # 重新設定搜索名稱按鈕
+                    self.listdirectory.searchcontents.setname(search[1])
+                # 搜索按鈕全部影藏
+                self.listdirectory.searchcontents.hide()
+        # 目前不是搜索 and 上一頁是搜索
+        elif self.self_path_list[0:3] == '搜索-':
+            # 搜索按鈕初始化
+            self.listdirectory.searchcontents.hide_()
+
+        # 查看是否要新增 上一頁目錄
+        if add is True:
+            # 下一頁目錄清空
+            self.on_page_list.clear()
+            # 下一頁按鈕 不可使用
+            self.listdirectory.set_pgon(False)
+            # 上一頁加入
+            self.up_page_list.append(cid)
+
+        result = True
+        if action or (cid in self.allpath and self.allpath[cid]['refresh']):
+            if action:
+                self.listdirectory.cls()
+                if await action() is False:
+                    result = False
+            if result:
+                del self.allpath[cid]
+                del self.listdirectory.savecontents[cid]
+
+        if cid not in self.listdirectory.savecontents:
+            self.listdirectory.new(cid)
+
+        if result:
+            if cid not in self.allpath or page not in self.allpath[cid]['data']:
+                if cid[0:3] == '搜索-':
+                    await self.search(cid, page)
+                else:
+                    # 刷新目錄
+                    if await create_task(self.refresh(cid, page)) == '0':
+                        create_task(self.network('0'))
+                        return
+            self.add(cid, page)
+            if cid[0:3] == '搜索-':
+                self.listdirectory.searchcontents.show()
+        # 關閉等待動畫
+        self.listdirectory.set_load_visible(False)
+
+    # 添加到窗口列表
+    def add(self, cid: str, page: int) -> None:
+        # 查看 上一頁 是否可以顯示可用
+        if len(self.up_page_list) != 1 and not self.listdirectory.get_pgup():
+            # 設定 上一頁按鈕 成可用
+            self.listdirectory.set_pgup(True)
+
+        # 添加瀏覽目錄
+        for _path in self.allpath[cid]['path']:
+            self.listdirectory.directory_add(_path[0], data=_path[1])
+
+        # 查看 目前目錄是否發生變化
+        if self.self_path_list != cid:
+            # 查看上一頁是否是搜索
+            if self.self_path_list[0:3] == '搜索-':
+                # 如果是則把上一頁搜索設定成需要刷新
+                self.allpath[self.self_path_list]['refresh'] = True
+            # 設定目前所在目錄
+            self.self_path_list = cid
+
+            if cid in self.listdirectory.savecontents:
+                self.listdirectory.switch(cid)
+                if self.listdirectory.textall != 0:
+                    return
+
+        # 查看是否需要增加頁數
+        if self.listdirectory.quantity.pagemax != self.allpath[cid]['page']:
+            self.listdirectory.addallpage(self.allpath[cid]['page'])
+            if page != self.listdirectory.quantity.page:
+                self.listdirectory.quantity.setpage(page, callback=False)
+
+        # 添加內容
+        self.listdirectory.textadds(
+            self.allpath[cid]['data'][page]
+        )
+
+    # 刷新目錄
+    @error()
+    async def refresh(self, cid: str, page: int) -> Union[str, bool]:
+        result = await self.directory.folder(cid, (page - 1) * self.listdirectory.pagemax, self.listdirectory.pagemax)
+        if result:
+            if cid != str(result['cid']):
+                return '0'
+            # 格式化115數據
+            self.dumps(result, cid, page)
+            return True
+        return False
+
+    # 搜索
+    @error()
+    async def search(self, cid: str, page: int) -> bool:
+        self.listdirectory.lineEdit.setText('')
+        _cid, _, name = re.search('搜索-(.+)-(.+)-(.+)', cid).groups()
+        result = await self.directory.searchfolder(
+            name, _cid,
+            (page - 1) * self.listdirectory.pagemax, self.listdirectory.pagemax
+        )
+        if result:
+            # 格式化115數據
+            self.dumps(result, cid, page)
+            return True
+        return False
+
+    # 頁數回調
+    def setpage(self, page: int) -> None:
+        cid = self.self_path_list
+        if page not in self.allpath[cid]['data'] or self.allpath[cid]['refresh'] or self.listdirectory.textall == 0:
+            create_task(self.network(cid=cid, page=page, add=False))
+
+    # 格式化115數據
+    def dumps(self, items: dict, cid: str, page: int) -> None:
+        def _getpath(__cid):
+            return lambda: create_task(self.network(__cid))
+
+        index: dict[str, dict[str, any]] = {}
+        textsavelist: list[NTextSave, ...] = []
+        for data in items['data']:
+            textsave: NTextSave = NTextSave(text={}, data=None, ico=None, leftclick=None, doubleclick=None)
+            # 獲取 檔案 or 資料夾 修改日期時間戳 並轉換成正常日期
+            if 'te' in data:
+                _time = data['te']
+            else:
+                _time = data['t'] if data['t'].isdigit() else int(
+                    time.mktime(time.strptime(f"{data['t']}:0", "%Y-%m-%d %H:%M:%S")))
+            _Time = time.strftime('%Y-%m-%d %H:%M', time.localtime(int(_time)))
+            # 獲取是否是檔案還是資料夾 ico
+            ico = get_ico(splitext(data['n'])[1] if 'fid' in data else '資料夾')
+            # 獲取檔案大小
+            size = data['s'] if 's' in data else '0'
+            # 獲取檔案cid
+            _cid = str(data['fid']) if 'fid' in data else str(data['cid'])
+            # 獲取點擊回調
+            slot = _getpath(_cid)
+            if ico == '資料夾':
+                text: MyTextSave = MyTextSave(text=data['n'], leftclick=[slot], color=((0, 0, 0), (6, 168, 255)))
+            else:
+                text: MyTextSave = MyTextSave(text=data['n'], leftclick=None, color=None)
+            textsave['text'] = text
+            textsave['data'] = {
+                'name': data['n'],
+                'category': '1' if 'fid' in data else '0',
+                'cid': _cid,
+                'pid': data['pid'] if 'pid' in data else data['cid'],
+                'time': int(_time),
+                'pc': data['pc'],
+                'sha1': data['sha'] if 'sha' in data else None,
+                'size': int(size),
+                'ico': ico,
+                'dp': data['dp'] if 'dp' in data else None,
+            }
+            textsave['ico'] = ico
+            textsave['doubleclick'] = [slot] if ico == '資料夾' else None
+            index[data['n']] = textsave['data']
+            textsavelist.append(textsave)
+
+        if cid not in self.allpath:
+            if 'path' in items:
+                path = [(i['name'], str(i['cid'])) for i in items['path']]
+            else:
+                path = [('根目录', '0'), (f'搜尋-{self.search_cid[1]}', cid)]
+            self.allpath.update(
+                {
+                    cid:
+                        {
+                            'data': {page: textsavelist},
+                            'path': path,
+                            'index': index,
+                            'refresh': False,
+                            'count': items['count'],
+                            'page': math.ceil(items['count'] / self.listdirectory.pagemax),
+                        }
+
+                }
+            )
+        else:
+            self.allpath[cid]['data'][page] = textsavelist
+            self.allpath[cid]['index'].update(index)
+
+    # 上一頁回調
+    def up_page(self) -> None:
+        # 獲取上一頁最後一cid
+        cid = self.up_page_list.pop()
+        # cid 添加到下一頁
+        self.on_page_list.append(cid)
+        # 查看 上一頁 是否只有一個
+        if len(self.up_page_list) == 1:
+            # 如果只有一個 設定 上一頁按鈕 關閉
+            self.listdirectory.set_pgup(False)
+        # 查看 下一頁按鈕 是否關閉
+        if not self.listdirectory.get_pgon():
+            # 如果關閉 則啟動
+            self.listdirectory.set_pgon(True)
+        # 獲取上一頁最後一個cid
+        cid = self.up_page_list[-1]
+        # 進入上一頁最後一個cid
+        create_task(self.network(cid=cid, add=False))
+
+    # 下一頁回調
+    def under_page(self) -> None:
+        # 獲取 下一頁 最後一個 cid
+        cid = self.on_page_list.pop()
+        # 查看 下一頁 是否還有
+        if not self.on_page_list:
+            # 如果沒有 則把 下一頁按鈕 關閉
+            self.listdirectory.set_pgon(False)
+        # cid 添加到 上一頁
+        self.up_page_list.append(cid)
+        # 進入 cid
+        create_task(self.network(cid=cid, add=False))
+
+    # 重新整理回調
+    async def reorganize(self) -> None:
+        self.listdirectory.set_refresh_gif_visible(True)
+        self.allpath[self.self_path_list]['refresh'] = True
+        await create_task(self.network(cid=self.self_path_list, page=self.listdirectory.quantity.page))
+        self.listdirectory.set_refresh_gif_visible(False)
+
+    # 右鍵回調
+    def menu_callback(self, menu: Callable) -> None:
+        if len(self.listdirectory.currentclick) > 1:
+            self.listdirectory.set_menu_visible('重新命名', False)
+        menu()
+        self.listdirectory.set_menu_visible('重新命名', True)
+
+    # 搜索回調
+    def _search_callback(self) -> None:
+        if self.self_path_list[0:3] == '搜索-':
+            cid = self.search_cid[0]
+            path = self.allpath[self.self_path_list]['path'][-1][0][3:]
+        else:
+            cid = self.self_path_list
+            path = self.allpath[self.self_path_list]['path'][-1][0]
+        create_task(self.network(
+            f'搜索-{cid}-{path}-'
+            f'{self.listdirectory.lineEdit.text()}')
+        )
+
+    # 搜索名稱回調
+    def _set_search_name_callback(self) -> None:
+        cid = f'搜索-{self.search_cid[0]}-{self.search_cid[1]}-{self.search_cid[2]}'
+        if cid in self.allpath:
+            self.allpath[cid]['refresh'] = True
+        create_task(self.network(cid, add=False))
+
+    # 搜索全部回調
+    def _set_search_all_callback(self) -> None:
+        cid = f'搜索-0-{self.search_cid[1]}-{self.search_cid[2]}'
+        if cid in self.allpath:
+            self.allpath[cid]['refresh'] = True
+        create_task(self.network(cid, add=False))
+
+    # 調整大小事件
+    def resizeEvent(self, event: QResizeEvent) -> None:
+        Window.resizeEvent(self, event)
+        self.listdirectory.resize(self.content_widget.width(), self.content_widget.height() - 70)
+
+
 # 離線窗口
-async def offline(directory):
+async def offline(directory, folderlist: FolderList) -> None:
     class Offline(Window):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__(TitleLabel_2, 75, tracking=False)
+            # 設置離線標題
             self.titlelabel.setdata('添加離線鏈結', (30, 25, 120, 30))
-            self.resize(746, 346)
             self.setStyleSheet('#shadow_widget{background-color:rgb(255,255,255);border-radius:15px}')
             self.cid = ''
             self.text = QTextEdit(self.shadow_widget)
             self.text.setGeometry(30, 75, 660, 175)
 
             self.savetext = TextQLabel(f'保存到：云下载', fontsize=12, move=(30, 275), parent=self.shadow_widget)
-
-            self.button = MyQLabel(
+            # 設置更改目錄按鈕
+            self.button: MyQLabel = MyQLabel(
                 '更改目錄', (self.savetext.x() + self.savetext.width() + 10, 269, 80, 30),
                 clicked=lambda: create_task(self.folder()), fontsize=12, parent=self.shadow_widget
             )
-
+            # 設置關閉按鈕
             MyIco('黑色關閉', '藍色關閉', coordinate=(670, 35, 12, 12), state=True,
                   click=self.close, parent=self.shadow_widget)
 
-            # 開始離線按鈕
+            # 設置開始離線按鈕
             MyQLabel(
                 '開始離線下載', (540, 190, 150, 40), clicked=lambda: create_task(self.end()),
                 qss=1, fontsize=16, parent=self.content_widget
@@ -182,15 +570,17 @@ async def offline(directory):
             self.load = gif(self.shadow_widget_, '加載_')
             # 設置 GIF 大小
             self.load.resize(32, 32)
+            # 設置窗口大小
+            self.resize(746, 346)
 
-        async def folder(self):
-            if data := await folderlist('選擇要保存的資料夾', '保存到這裡', directory):
+        async def folder(self) -> None:
+            if data := await folderlist.stop('選擇要保存的資料夾', '保存到這裡', self):
                 self.cid, name = data
                 self.savetext.setText(f'保存到：{name}')
                 self.savetext.adjustSize()
                 self.button.move(self.savetext.x() + self.savetext.width() + 10, 269)
 
-        async def end(self):
+        async def end(self) -> None:
             self.shadow_widget_.show()
             self.load.show()
             result = self.text.toPlainText()
@@ -206,7 +596,8 @@ async def offline(directory):
                         break
             self.close()
 
-        def resizeEvent(self, event):
+        # 調整大小事件
+        def resizeEvent(self, event: QResizeEvent) -> None:
             Window.resizeEvent(self, event)
             self.shadow_widget_.resize(self.width() - self.padding * 2, self.height() - self.padding * 2)
             self.load.move(
@@ -222,324 +613,12 @@ async def offline(directory):
         await sleep(0.1)
 
 
-async def folderlist(text, buttonname, directory):
-    class FolderList(Window):
-        def __init__(self):
-            super().__init__(TitleLabel_2, 75, tracking=False)
-            self.titlelabel.setdata(text, (30, 25, 250, 30))
-            self.resize(700, 565)
-            # 設置 背景空白 圓角邊框
-            self.setStyleSheet('#shadow_widget{background-color:rgb(255,255,255);border-radius:15px}')
-            # 目前所在目錄
-            self.self_path_list = '0'
-            self.search_cid = None
-            # 所有目錄資料
-            self.allpath = {}
-            # 上一頁目錄順序
-            self.up_page_list = []
-            # 下一頁目錄順序
-            self.under_page_list = []
-            self.listdirectory = ListDirectory(False, self.content_widget)
-            self.listdirectory.setStyleSheet(
-                'NList{border-style:solid; border-bottom-width:1px; border-color:rgba(200, 200, 200, 125)}'
-            )
-            # 結果
-            self.result = None
-            # 設定目錄點擊回調
-            self.listdirectory.directory_slot = self.directory_del
-            # 設定頁數回調
-            self.listdirectory.page_callback = self.setpage
-            # 設定上一頁回調
-            self.listdirectory.pgup_connect(self.up_page)
-            # 設定下一頁回調
-            self.listdirectory.pgon_connect(self.under_page)
-            # 設定重新整理回調
-            self.listdirectory.rectangle_connect(lambda: create_task(self.reorganize()))
-            # 設定搜索回調
-            self.listdirectory.linedit_connect(self._search_callback)
-            self.listdirectory.set_search_all_connect(self._set_search_all_callback)
-            self.listdirectory.set_search_name_connect(self._set_search_name_callback)
-
-            # 開始離線按鈕
-            self.button = MyQLabel(
-                buttonname, (520, 411, 130, 40), clicked=self.end, qss=1, fontsize=16, parent=self.content_widget
-            )
-            self.folder_button = MyQLabel(
-                '新建資料夾', (20, 411, 130, 40), clicked=lambda: create_task(self.get_enter('新建資料夾')),
-                fontsize=16, parent=self.content_widget
-            )
-
-            # MyIco('黑色關閉', '藍色關閉', coordinate=(620, 35, 12, 12), state=True,
-            #       click=self.close, parent=self.shadow_widget)
-
-            create_task(self.network(cid='0', pages=True))
-
-        async def get_enter(self, action):
-            if action == '新建資料夾' and self.self_path_list[0:3] != '搜索-':
-                if name := await myenter('新建資料夾', '新名稱'):
-                    await self.network(self.self_path_list, data=name, action='新建資料夾')
-
-        def _set_search_name_callback(self):
-            cid = f'搜索-{self.search_cid[0]}-{self.search_cid[1]}-{self.search_cid[2]}'
-            create_task(self.network(cid, pages=False))
-
-        def _set_search_all_callback(self):
-            cid = f'搜索-0-{self.search_cid[1]}-{self.search_cid[2]}'
-            create_task(self.network(cid, pages=False))
-
-        def _search_callback(self):
-            if self.self_path_list[0:3] == '搜索-':
-                cid = self.search_cid[0]
-                path = self.allpath[self.self_path_list]["path"][-1][0][3:]
-            else:
-                cid = self.self_path_list
-                path = self.allpath[self.self_path_list]["path"][-1][0]
-            create_task(self.network(
-                f'搜索-{cid}-{path}-'
-                f'{self.listdirectory.lineEdit.text()}', pages=True)
-            )
-
-        def end(self):
-            if self.self_path_list[0:3] != '搜索-':
-                self.result = self.self_path_list, self.allpath[self.self_path_list]["path"][-1][0]
-                self.close()
-
-        def closeEvent(self, event):
-            if self.result is None:
-                self.result = False
-            event.accept()
-
-        # 搜索
-        @error()
-        async def search(self, cid, index):
-            self.listdirectory.lineEdit.setText('')
-            _cid, _, name = re.search('搜索-(.+)-(.+)-(.+)', cid).groups()
-            result = await directory.searchfolder(
-                name, _cid,
-                index * self.listdirectory.pagemax, self.listdirectory.pagemax
-            )
-            if result:
-                if cid not in self.allpath:
-                    self.allpath.update(self.dumps(cid, result, index))
-                else:
-                    self.allpath[cid][index] = self.dumps(cid, result, index)[cid][index]
-            return result
-
-        # 重新整理回調
-        async def reorganize(self):
-            self.listdirectory.refresh_show()
-            await self.network(cid=self.self_path_list)
-            self.listdirectory.refresh_hide()
-
-        # 上一頁回調
-        def up_page(self):
-            cid = self.up_page_list.pop()
-            self.under_page_list.append(cid)
-            if len(self.up_page_list) == 1:
-                self.listdirectory.set_pgup(False)
-            if not self.listdirectory.get_pgon():
-                self.listdirectory.set_pgon(True)
-            cid = self.up_page_list[-1]
-            create_task(self.network(cid=cid, pages=False))
-
-        # 下一頁回調
-        def under_page(self):
-            cid = self.under_page_list.pop()
-            if not self.under_page_list:
-                self.listdirectory.set_pgon(False)
-            self.up_page_list.append(cid)
-            create_task(self.network(cid=cid, pages=False))
-
-        # 頁數回調
-        def setpage(self, index):
-            cid = self.self_path_list
-            if index not in self.allpath[cid]:
-                create_task(self.network(cid=self.self_path_list, index=index))
-
-        # 目錄點擊回調
-        def directory_del(self, texts):
-            create_task(self.network(cid=texts.data, pages=True))
-
-        async def network(self, cid, index=0, data=None, action=None,  pages=None):
-            # self.setCursor(Qt.ArrowCursor)
-            self.listdirectory.scrollarea.verticalcontents.setvalue(0)
-            self.listdirectory.scrollarea.hrizontalcontents.setvalue(0)
-            # 瀏覽目錄清空
-            self.listdirectory.directory_cls()
-            # 統計數字隱藏
-            self.listdirectory.quantity.alltext.hide()
-            # 顯示等待動畫
-            self.listdirectory.load_show()
-            # 禁止操作
-            self.prohibit(True)
-            if cid[0:3] == '搜索-':
-                search = re.search('搜索-(.+)-(.+)-(.+)', cid).groups()
-                if self.self_path_list[0:3] != '搜索-':
-                    self.search_cid = search
-                    if self.search_cid[0] != '0':
-                        self.listdirectory.setname(self.search_cid[1])
-                else:
-                    if search[1] != self.listdirectory.searchbutton.search_name.text():
-                        self.listdirectory.setname(search[1])
-                    self.listdirectory.searchbutton.hide()
-            elif self.self_path_list[0:3] == '搜索-' and cid[0:3] != '搜索-':
-                self.listdirectory.searchbutton.hide_()
-
-            # 設定目前所在目錄
-            if self.self_path_list != cid:
-                self.self_path_list = cid
-                # 刪除舊的容器
-                self.listdirectory.delete_contents()
-                # 新增新容器
-                self.listdirectory.new_contents()
-
-            result = True
-            if action == '新建資料夾':
-                if await self.add_folder(cid, data) is False:
-                    result = False
-
-            if pages is True:
-                # 下一頁目錄清空
-                self.under_page_list = []
-                # 下一頁按鈕 不可使用
-                self.listdirectory.set_pgon(False)
-                # 上一頁加入
-                self.up_page_list.append(cid)
-            if result:
-                if cid[0:3] == '搜索-':
-                    await self.search(cid, index)
-                else:
-                    # 刷新目錄
-                    if await create_task(self.refresh(cid, index)) == '0':
-                        create_task(self.network(cid='0', pages=True))
-                        return
-                # 目錄添加到列表
-                await create_task(self.add(cid, index, True))
-                if cid[0:3] == '搜索-':
-                    self.listdirectory.searchbutton.show()
-            # 可以操作
-            self.prohibit(False)
-            # 隱藏等待動畫
-            self.listdirectory.load_hide()
-            if self.listdirectory.quantity:
-                # 統計數字顯示
-                self.listdirectory.quantity.alltext.show()
-
-        # 新建資料夾
-        @error()
-        async def add_folder(self, pid, name):
-            return await directory.add_folder(pid, name)
-
-        # 添加到窗口列表
-        async def add(self, cid, index, value):
-            # 獲取目錄相關資料
-            text, data, ico, my_mode, text_mode = self.allpath[cid][index].values()
-            path = self.allpath[cid]['path']
-            # 查看 上一頁 是否可以顯示可用
-            if len(self.up_page_list) != 1 and not self.listdirectory.get_pgup():
-                # 設定 上一頁按鈕 成可用
-                self.listdirectory.set_pgup(True)
-            if index == 0:
-                self.listdirectory.page_advance(self.allpath[cid]['page'])
-            # 查看是否需要手動添加
-            if value:
-                # 添加目錄到新的內容窗口
-                await self.listdirectory.text_adds(text, index=index, icos=ico, datas=data, my_modes=my_mode, text_modes=text_mode)
-            else:
-                # 更換舊的內容窗口資料
-                self.listdirectory.replace_contents(cid)
-            # 添加瀏覽目錄
-            for _path in path:
-                self.listdirectory.directory_add(_path[0], data=_path[1])
-
-        @error()
-        async def refresh(self, cid, index):
-            result = await directory.folder(cid, index * self.listdirectory.pagemax, self.listdirectory.pagemax)
-            if result:
-                if index == 0:
-                    self.allpath.update(self.dumps(cid, result, index))
-                else:
-                    self.allpath[cid][index] = self.dumps(cid, result, index)[cid][index]
-            return result
-
-        # 禁止操作
-        def prohibit(self, mode):
-            # 是否禁止 搜索欄
-            self.listdirectory.directorycontainer.setEnabled(not mode)
-            # 是否禁止 頁數欄
-            self.listdirectory.quantity.pageico.setEnabled(not mode)
-            self.button.setEnabled(not mode)
-            self.folder_button.setEnabled(not mode)
-
-        # 分析115數據
-        def dumps(self, cid, items, index):
-            def _getpath(__cid):
-                return lambda: create_task(self.network(__cid, pages=True))
-            path = {cid: {index: {'text': [], 'data': [], 'ico': [], 'my_mode': [], 'text_mode': []},
-                          'path': [], 'page': 0}}
-
-            for data in items['data']:
-                if 'te' in data:
-                    _time = data['te']
-                else:
-                    _time = data['t'] if data['t'].isdigit() else int(
-                        time.mktime(time.strptime(f"{data['t']}:0", "%Y-%m-%d %H:%M:%S")))
-                _Time = time.strftime('%Y-%m-%d %H:%M', time.localtime(int(_time)))
-                ico = get_ico(splitext(data['n'])[1] if 'fid' in data else '資料夾')
-                size = data['s'] if 's' in data else '0'
-
-                path[cid][index]['text'].append(data['n'])
-                _cid = str(data['fid']) if 'fid' in data else str(data['cid'])
-                path[cid][index]['data'].append({
-                    'name': data['n'],
-                    'category': '1' if 'fid' in data else '0',
-                    'cid': _cid,
-                    'pid': data['pid'] if 'pid' in data else data['cid'],
-                    'time': int(_time),
-                    'pc': data['pc'],
-                    'sha1': data['sha'] if 'sha' in data else None,
-                    'size': int(size),
-                    'ico': ico,
-                    'dp': data['dp'] if 'dp' in data else None,
-                })
-
-                path[cid][index]['ico'].append(ico)
-                slot = _getpath(_cid)
-                my_mode = {'leftclick': [slot], 'cursor': True}
-                text_mode = {'leftclick': [slot], 'cursor': True}
-                path[cid][index]['my_mode'].append(my_mode)
-                path[cid][index]['text_mode'].append(text_mode)
-
-            if index == 0:
-                page = math.ceil(items['count'] / self.listdirectory.pagemax)
-                path[cid].update({'page': page})
-                if 'path' in items:
-                    for _path in items['path']:
-                        path[cid]['path'].append((_path['name'], str(_path['cid'])))
-                # 搜索
-                elif 'folder' in items:
-                    path[cid]['path'].append(('根目录', '0'))
-                    path[cid]['path'].append((f'搜尋-{self.search_cid[1]}', cid))
-            return path
-
-        def resizeEvent(self, event):
-            Window.resizeEvent(self, event)
-            self.listdirectory.resize(self.content_widget.width(), self.content_widget.height() - 70)
-
-    _folderlist = FolderList()
-    _folderlist.show()
-    while 1:
-        if _folderlist.result is not None:
-            return _folderlist.result
-        await sleep(0.1)
-
-
-async def sha1save(cid, name, directory):
+async def sha1save(cid: str, name: str, folderlist: FolderList):
     class Sha1Save(Window):
-        def __init__(self):
+        def __init__(self) -> None:
             super().__init__(TitleLabel_2, 75, tracking=False)
+            # 設置 sha1 標題
             self.titlelabel.setdata('添加sha1鏈結', (30, 25, 250, 30))
-            self.resize(746, 381)
             # 設置 背景空白 圓角邊框
             self.setStyleSheet('#shadow_widget{background-color:rgb(255,255,255);border-radius:15px}')
             # 顯示保存到哪裡標籤
@@ -547,7 +626,7 @@ async def sha1save(cid, name, directory):
             # 導入sha1鏈結文件標題
             TextQLabel('導入sha1鏈結文件', fontsize=12, move=(30, 195), parent=self.content_widget)
             # 未選擇任何檔案標題
-            self.file_label = TextQLabel(f'未選擇任何檔案', fontsize=12, move=(260, 193), parent=self.content_widget)
+            self.file_label: TextQLabel = TextQLabel(f'未選擇任何檔案', fontsize=12, move=(260, 193), parent=self.content_widget)
             self.file_label.setStyleSheet('color: blue')
             MyQLabel('選擇檔案', (170, 187, 80, 30), fontsize=16, clicked=self.open, parent=self.content_widget)
             self.changebutton = MyQLabel(
@@ -559,20 +638,26 @@ async def sha1save(cid, name, directory):
                 clicked=self.end, parent=self.content_widget
             )
             MyIco('黑色關閉', '藍色關閉', coordinate=(670, 35, 12, 12), state=True, click=self.close, parent=self.titlelabel)
-            self.text = QTextEdit(self.content_widget)
+            # 設置 sha1 文本框
+            self.text: QTextEdit = QTextEdit(self.content_widget)
             self.text.setGeometry(30, 0, 660, 175)
-            self.cid = cid
-            self.path = None
-            self.result = None
+            # 保存目錄cid
+            self.cid: str = cid
+            # sha1文件路徑
+            self.path: str = ''
+            # 結果
+            self.result: Optional[tuple[str, str]] = None
+            # 設置窗口大小
+            self.resize(746, 381)
 
-        async def folder(self):
-            if data := await folderlist('選擇要保存的資料夾', '保存到這裡', directory):
+        async def folder(self) -> None:
+            if data := await folderlist.stop('選擇要保存的資料夾', '保存到這裡', self):
                 self.cid, _name = data
                 self.savetext.setText(f'保存到：{_name}')
                 self.savetext.adjustSize()
-                self.changebutton.move(self.savetext.x() + self.savetext.width() + 10, 269)
+                self.changebutton.move(self.savetext.x() + self.savetext.width() + 10, 227)
 
-        def end(self):
+        def end(self) -> None:
             if text := self.text.toPlainText():
                 if text[-1] != '\n':
                     text += '\n'
@@ -583,7 +668,7 @@ async def sha1save(cid, name, directory):
                 self.result = self.cid, text
             self.close()
 
-        def open(self):
+        def open(self) -> None:
             self.path, _ = QFileDialog.getOpenFileName(self, "選擇sha1檔案", "/", filter='Text Files (*.txt)')
             if self.path:
                 self.file_label.setText(f'{basename(self.path)}')
@@ -591,7 +676,7 @@ async def sha1save(cid, name, directory):
                 self.file_label.setText('未選擇任何檔案')
             self.file_label.adjustSize()
 
-        def closeEvent(self, event):
+        def closeEvent(self, event: QCloseEvent) -> None:
             if self.result is None:
                 self.result = False
             event.accept()
@@ -604,32 +689,28 @@ async def sha1save(cid, name, directory):
         await sleep(0.1)
 
 
-def myfiledialog(parent):
+async def myfiledialog(parent: QObject) -> list[str, ...]:
     class MyFileDialog(QFileDialog):
-        def __init__(self):
+        def __init__(self) -> None:
             super(MyFileDialog, self).__init__(parent)
-            self.result = ''
+            self.result: list[str, ...] = []
+            self.setWindowModality(Qt.NonModal)
             self.setOption(QFileDialog.DontUseNativeDialog, True)
             self.findChild(QListView, 'listView').setSelectionMode(QAbstractItemView.ExtendedSelection)
             self.findChild(QTreeView, 'treeView').setSelectionMode(QAbstractItemView.ExtendedSelection)
             button = self.findChild(QDialogButtonBox, 'buttonBox')
             button.accepted.disconnect(self.accept)
             button.accepted.connect(lambda: self.setvalue(self.selectedFiles()))
-            self.exec()
+            self.show()
 
-        def setvalue(self, value):
+        def setvalue(self, value: list[str, ...]) -> None:
             self.result = value
             self.close()
 
     _myfiledialog = MyFileDialog()
-    return _myfiledialog.result
+    _myfiledialog.show()
+    while 1:
+        if _myfiledialog.result:
+            return _myfiledialog.result
+        await sleep(0.1)
 
-
-if __name__ == '__main__':
-    from PyQt5.Qt import QApplication
-    import sys
-    app = QApplication(sys.argv)
-    # widget = Enter('新建資料夾', '新名稱')
-    widget = sha1save(0, 0, 0)
-    widget.show()
-    sys.exit(app.exec_())

@@ -2,9 +2,9 @@ from Callback import Callback
 from threading import Thread
 import time
 import base64
-from module import set_state, gather, create_task, uuid1, hashlib, sleep, httpx, CancelledError
-import oss2
-from oss2.models import PartInfo
+from module import setstate, gather, create_task, uuid1, hashlib, sleep, httpx, CancelledError, Lock, ConfigParser
+from API.upload115 import Upload115
+from API.directory import Directory
 
 
 def get_slice_md5(bio):
@@ -39,25 +39,22 @@ class GetSha1(Thread):
 
 
 class Upload:
-    def __init__(self, upload115, state, lock, closes, directory, config):
-        # 共享數據資料
-        self.state = state
-        # 數據鎖
-        self.lock = lock
-        # 關閉信號
-        self.closes = closes
-        # 用戶數據
-        self.config = config
-        # 初始化上傳任務
-        self.task = None
+    def __init__(self, upload115: Upload115, state: dict[str, any],
+                 lock: Lock, directory: Directory, config: ConfigParser) -> None:
+        # 共享數據
+        self.state: dict[str, any] = state
+        # 共享數據鎖
+        self.lock: Lock = lock
+        # 用戶資料
+        self.config: ConfigParser = config
         # 上傳API
-        self.upload115 = upload115
+        self.upload115: Upload115 = upload115
         # 115API
-        self.directory = directory
-        # 所有任務
+        self.directory: Directory = directory
+        # 初始化上傳任務
         self.task = {}
 
-    def range(self, size):
+    def range(self, size: int) -> dict[str, tuple[int, int]]:
         upload = {}
         i = 0
         if size > 4194304:
@@ -74,7 +71,7 @@ class Upload:
         # 檢查是否有key
         if await self.checktoken() is not None:
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'state': '獲取key失敗'})
             return
 
@@ -85,7 +82,7 @@ class Upload:
                 await sleep(0.1)
             blockhash, sha1 = getsha1.get_result()
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'sha1': sha1, 'blockhash': blockhash})
         state = self.state[uuid]
         result = await self.upload115.upload_file_by_sha1(
@@ -95,7 +92,7 @@ class Upload:
         result = await self.detect_upload(result, state)
 
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 if result == '秒傳完成':
                     state.update({'state': 'end', 'result': '秒傳完成'})
                 else:
@@ -104,7 +101,7 @@ class Upload:
     async def upload_task(self, uuid):
         result = await self.upload(uuid)
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 if self.state[uuid]['state'] is None:
                     if result in ['上傳完成', '秒傳完成']:
                         state.update({'stop': False, 'state': 'end', 'result': result})
@@ -149,7 +146,7 @@ class Upload:
                 await sleep(0.1)
             blockhash, sha1 = getsha1.get_result()
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'sha1': sha1, 'blockhash': blockhash})
         state = self.state[uuid]
         # 檢查是否已經秒傳過
@@ -165,7 +162,7 @@ class Upload:
                   "x-oss-callback-var": base64.b64encode(result['callback']['callback_var'].encode()).decode()}
 
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'second': False, 'bucket': result['bucket'],
                                   'upload_key': result['object'], 'cb': cb})
 
@@ -179,30 +176,14 @@ class Upload:
             # 獲取uploadid
             if (upload_id := await self.upload115.get_upload_id(url, state['upload_key'])) is False:
                 return '獲取uploadid失敗'
-            print(upload_id, state['name'])
+            # print(upload_id, state['name'])
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'url': url, 'upload_id': upload_id, 'range': self.range(state['length'])})
 
         with self.lock:
-            with set_state(self.state, uuid) as state:
+            with setstate(self.state, uuid) as state:
                 state.update({'stop': True})
-
-        # if not state['range']:
-        #     auth = oss2.Auth(self.upload115.token['AccessKeyId'], self.upload115.token['AccessKeySecret'])
-        #     bucket = oss2.Bucket(auth, self.upload115.token['endpoint'], state['bucket'])
-        #     parts = []
-        #     etag = self.state[uuid]['etag']
-        #     for i in range(1, len(etag) + 1):
-        #         parts.append(PartInfo(i, etag[str(i)][1:-1]))
-        #     headers_1 = {
-        #         'x-oss-security-token': self.upload115.token['SecurityToken'],
-        #         'x-oss-callback': state['cb']['x-oss-callback'].encode(),
-        #         'x-oss-callback-var': state['cb']['x-oss-callback-var'].encode()
-        #     }
-        #     z = bucket.complete_multipart_upload(state['upload_key'], state['upload_id'], parts, headers=headers_1)
-        #     print(z)
-        #     return '上傳完成'
 
         callback = Callback()
         callback.all_size = state['size']
@@ -232,19 +213,19 @@ class Upload:
             if result:
                 return await self.detect_upload(result, state)
             else:
-                print(state['name'], '異常')
+                # print(state['name'], '異常')
                 if not await self.directory.get_fid(state['name']):
                     return '上傳失敗 需要重新上傳'
         else:
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'size': callback.all_size})
             return state['state']
 
     async def setsize(self, uuid):
         while not self.task[uuid]['task'].done():
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     if state['state']:
                         self.task[uuid]['task'].cancel()
                     else:
@@ -261,7 +242,7 @@ class Upload:
             # 檢查token是否失效
             if await self.checktoken(key=False) is not None:
                 with self.lock:
-                    with set_state(self.state, uuid) as state:
+                    with setstate(self.state, uuid) as state:
                         state['state'] = '獲取token失敗'
                 return
 
@@ -287,7 +268,7 @@ class Upload:
                             if result['content-md5'] != md5.decode():
                                 raise
                             with self.lock:
-                                with set_state(self.state, uuid) as state:
+                                with setstate(self.state, uuid) as state:
                                     del state['range'][str(index)]
                                     state['etag'][str(index)] = result['etag']
                             break
@@ -297,7 +278,7 @@ class Upload:
                     except (Exception, ):
                         if i == 4:
                             with self.lock:
-                                with set_state(self.state, uuid) as state:
+                                with setstate(self.state, uuid) as state:
                                     state['state'] = '網路異常 上傳失敗'
                             return
                         _callback.delete()

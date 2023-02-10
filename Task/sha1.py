@@ -1,5 +1,5 @@
 from threading import Thread
-from module import hashlib, sleep, set_state
+from module import hashlib, sleep, setstate
 
 
 class GetSha1:
@@ -15,12 +15,12 @@ class GetSha1:
             await sleep(0.1)
         if self.state[uuid]['state']:
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'stop': False})
         else:
             blockhash, sha1 = getsha1.get_result()
             with self.lock:
-                with set_state(self.state, uuid) as state:
+                with setstate(self.state, uuid) as state:
                     state.update({'blockhash': blockhash.upper(), 'sha1': sha1.upper(), 'stop': False})
 
 
