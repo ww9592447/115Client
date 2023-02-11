@@ -309,9 +309,6 @@ class Fake115GUI(Window):
                     self.uploadlist.sha1_add(state, value=False)
             remove('state.json')
 
-    def qq(self):
-        print(QFileDialog.getOpenFileNames())
-
     # 頁數回調
     def setpage(self, page: int) -> None:
         cid = self.self_path_list
