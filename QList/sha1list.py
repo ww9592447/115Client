@@ -44,7 +44,7 @@ class QFolder(MQtext2):
                     data['dir'] = self.dir
                     self.add(data, True)
         else:
-            self.setdata({'state': 'error', 'result': result[1]})
+            self.setstate({'state': 'error', 'result': result[1]})
         self.end.emit(self)
 
     # 設置禁止打開
@@ -82,7 +82,7 @@ class Qtext(MQtext2):
                     self.sha1text.append(_sha1)
                     self.end.emit(self)
                 elif state['state']:
-                    self.setdata(state)
+                    self.setstate(state)
                 return
             await sleep(0.1)
 

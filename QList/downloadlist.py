@@ -86,7 +86,7 @@ class Qtext(MQtext1):
                     self.progressText.setText('檢測sha1中...')
             elif not state['stop'] and state['state']:
                 self.size = state['size']
-                self.setdata(state)
+                self.setstate(state)
                 return
             await sleep(0.1)
 

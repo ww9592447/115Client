@@ -42,7 +42,7 @@ class QFolder(MQtext2):
                 else:
                     self.add(data, True)
         else:
-            self.setdata({'state': 'error', 'result': result[1]})
+            self.setstate({'state': 'error', 'result': result[1]})
         self.end.emit(self)
 
 
@@ -81,7 +81,7 @@ class Qtext(MQtext1):
                 self.gid = self.state[self.uuid]['gid']
                 break
             elif state['state']:
-                self.setdata(state)
+                self.setstate(state)
                 return
             await sleep(0.1)
 
@@ -105,7 +105,7 @@ class Qtext(MQtext1):
                     self.progressBar.setValue(_size)
                     self.progressBar.update()
             elif result is False:
-                self.setdata({'state': 'error', 'result': 'aria2_rpc連接失敗'})
+                self.setstate({'state': 'error', 'result': 'aria2_rpc連接失敗'})
                 return
             await sleep(0.1)
 

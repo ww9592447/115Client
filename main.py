@@ -373,7 +373,9 @@ class Fake115GUI(Window):
                 del self.allpath[cid]
                 del self.listdirectory.savecontents[cid]
 
+        # 查看 cid 是否不在 所有介面的頁數資料
         if cid not in self.listdirectory.savecontents:
+            # 如果不再 則新增 新窗口
             self.listdirectory.new(cid)
 
         if result:
@@ -506,8 +508,12 @@ class Fake115GUI(Window):
         elif cid[0:3] != '搜索-' and ' 所在目錄' in self.listdirectory.titlelist.text():
             self.listdirectory.set_title_visible(' 所在目錄', False)
 
-        # 查看 目前目錄是否發生變化
-        if self.self_path_list != cid:
+        # 查看 目前目錄是否一樣 and 查看text 資料是否一樣
+        if self.self_path_list == cid and self.listdirectory.textsave == self.allpath[cid]['data'][page]:
+            # 如果都一樣 退出
+            return
+        # 查看目前目錄 是否變化
+        elif self.self_path_list != cid:
             # 查看上一頁是否是搜索
             if self.self_path_list[0:3] == '搜索-':
                 # 如果是則把上一頁搜索設定成需要刷新

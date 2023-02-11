@@ -145,7 +145,6 @@ class ListCheck(QFrame):
             'ico': ico,
             'leftclick': leftclick,
             'doubleclick': doubleclick
-
         }
         self.textsave.append(textsave)
         self.textall += 1
@@ -234,50 +233,54 @@ class List:
     def __init__(self, listcheck: ListCheck, _max: int) -> None:
         self.listcheck: ListCheck = listcheck
         # 所有 text 資料
-        self._text: dict[int, list[TextSave, ...]] = {1: []}
+        self.text: dict[int, list[TextSave, ...]] = {1: []}
         # 一頁顯示多少個
-        self._max: int = _max
+        self.max: int = _max
         # 儲存目前標題
-        self._title: list[str, ...] = []
+        self.title: list[str, ...] = []
 
     # 初始化資料
     def cls(self):
         # 初始化 所有 text 資料
-        self._text.clear()
+        self.text.clear()
         # 設置新數值
-        self._text[1] = []
+        self.text[1] = []
         # 初始化 目前標題
-        self._title.clear()
+        self.title.clear()
 
     # 新增標題
     def addtitle(self, title: list[str, ...]) -> None:
-        self._title.clear()
-        self._title.extend(title.copy())
+        self.title.clear()
+        self.title.extend(title.copy())
 
     # 獲取標題
     def gettitle(self) -> list[str, ...]:
-        return self._title
+        return self.title
 
     # 設置最大頁數
     def addallpage(self, index: int) -> None:
-        for value in range(len(self._text) + 1, index + 1):
+        for value in range(len(self.text) + 1, index + 1):
             # 設置最大頁數
-            self._text[value] = []
+            self.text[value] = []
 
     # 新增新text資料
     def append(self, value: TextSave) -> None:
         # 新增 text 資料
-        self._text[self.listcheck.quantity.page].append(value)
+        self.text[self.listcheck.quantity.page].append(value)
+
+    # ==
+    def __eq__(self, other: list[TextSave, ...]) -> bool:
+        return self.text[self.listcheck.quantity.page] == other
 
     # dict[key]
     def __getitem__(self, index: int) -> TextSave:
-        return self._text[self.listcheck.quantity.page][index]
+        return self.text[self.listcheck.quantity.page][index]
 
     def len(self) -> int:
-        return len(self._text[self.listcheck.quantity.page])
+        return len(self.text[self.listcheck.quantity.page])
 
     def __len__(self) -> int:
-        return len(self._text)
+        return len(self.text)
 
 
 # 所有點擊
