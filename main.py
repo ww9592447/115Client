@@ -3,7 +3,7 @@ from module import QApplication, QWidget, split, set_event_loop, isfile, backdro
     isdir, walk, join, get_ico, remove, exists, ListDirectory, math, Path, QObject,\
     QResizeEvent, Optional, Callable, TextSave, MyTextSave, Union, AllPath, ConfigParser,  QCloseEvent,\
     Process, Manager, Lock, Value, freeze_support, QButtonGroup, Awaitable, AsyncIterable, QDragEnterEvent, \
-    QDropEvent, QFileDialog
+    QDropEvent
 from hints import error, myenter, myerror, offline, FolderList, sha1save, myfiledialog
 from MyQlist.QText import Text
 from API.directory import Directory
@@ -12,7 +12,6 @@ from sys import argv
 from QList.endlist import EndList
 from QList.downloadlist import DownloadList
 from QList.uploadlist import UploadList
-from QList.sha1list import Sha1List
 from QList.aria2list import Aria2List
 from QList.offlinelist import Offlinelist
 from mprocess import Mprocess
@@ -147,7 +146,7 @@ class Fake115GUI(Window):
         # 加入傳輸完畢視窗
         self.endlist: EndList = EndList(
             lambda: self.sidebar_1.click(), self.network,
-            lambda index: self.settext(self.sidebar_6, index), self.child_window
+            lambda index: self.settext(self.sidebar_5, index), self.child_window
         )
         # 加入下載視窗
         self.downloadlist: DownloadList = DownloadList(
@@ -155,21 +154,16 @@ class Fake115GUI(Window):
             self.config, self.endlist, self.getfolder, lambda index: self.settext(self.sidebar_2, index),
             parent=self.child_window
         )
-        # 加入sha1視窗
-        self.sha1list: Sha1List = Sha1List(
-            self._state, self.lock, self.wait, self.waitlock,
-            self.getfolder, lambda index: self.settext(self.sidebar_3, index),  parent=self.child_window
-        )
         # 加入上傳視窗
         self.uploadlist = UploadList(
             self._state, self.lock, self.wait, self.waitlock,
-            self.config, self.endlist, self.allpath, self.search_add_folder, lambda index: self.settext(self.sidebar_4, index),
+            self.config, self.endlist, self.allpath, self.search_add_folder, lambda index: self.settext(self.sidebar_3, index),
             parent=self.child_window
         )
         # 加入aria2視窗
         self.aria2list = Aria2List(
             self._state, self.lock, self.wait, self.waitlock,
-            self.config, self.endlist, self.getfolder, lambda index: self.settext(self.sidebar_5, index),
+            self.config, self.endlist, self.getfolder, lambda index: self.settext(self.sidebar_4, index),
             parent=self.child_window
         )
         # 加入離線視窗
@@ -189,19 +183,16 @@ class Fake115GUI(Window):
             '正在下載', '下載', '下載藍色', move=(0, 38), window=self.downloadlist, parent=self.content_widget
         )
         self.sidebar_3 = Sidebar(
-            'sha1', '下載', '下載藍色', move=(0, 76), window=self.sha1list, parent=self.content_widget
+            '正在上傳', '上傳', '上傳藍色', move=(0, 76), window=self.uploadlist, parent=self.content_widget
         )
         self.sidebar_4 = Sidebar(
-            '正在上傳', '上傳', '上傳藍色', move=(0, 114), window=self.uploadlist, parent=self.content_widget
+            'Aria2', '黑色aria2', '藍色aria2', move=(0, 114), window=self.aria2list, parent=self.content_widget
         )
-        self.sidebar_5 = Sidebar(
-            'Aria2', '黑色aria2', '藍色aria2', move=(0, 152), window=self.aria2list, parent=self.content_widget
+        self.sidebar_5: Sidebar = Sidebar(
+            '傳輸完成', '傳輸完成', '傳輸完成藍色', move=(0, 152), window=self.endlist, parent=self.content_widget
         )
         self.sidebar_6: Sidebar = Sidebar(
-            '傳輸完成', '傳輸完成', '傳輸完成藍色', move=(0, 190), window=self.endlist, parent=self.content_widget
-        )
-        self.sidebar_7: Sidebar = Sidebar(
-            '離線下載', '傳輸完成', '傳輸完成藍色', move=(0, 228), window=self.offlinelist, parent=self.content_widget
+            '離線下載', '傳輸完成', '傳輸完成藍色', move=(0, 190), window=self.offlinelist, parent=self.content_widget
         )
         self.btngroup.addButton(self.sidebar_1, 1)
         self.btngroup.addButton(self.sidebar_2, 2)
@@ -209,7 +200,6 @@ class Fake115GUI(Window):
         self.btngroup.addButton(self.sidebar_5, 5)
         self.btngroup.addButton(self.sidebar_4, 4)
         self.btngroup.addButton(self.sidebar_6, 6)
-        self.btngroup.addButton(self.sidebar_7, 7)
         # 設定預設瀏覽窗口
         self.sidebar_1.click()
         # 新增瀏覽視窗標題
@@ -931,7 +921,6 @@ class Fake115GUI(Window):
         self.mylistdirectory.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.downloadlist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.uploadlist.resize(self.content_widget.width() - 165, self.content_widget.height())
-        self.sha1list.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.aria2list.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.offlinelist.resize(self.content_widget.width() - 165, self.content_widget.height())
         self.endlist.resize(self.content_widget.width() - 165, self.content_widget.height())

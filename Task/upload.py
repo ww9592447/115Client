@@ -1,4 +1,4 @@
-from Callback import Callback
+from .Callback import Callback
 from threading import Thread
 import time
 import base64
@@ -22,17 +22,13 @@ class GetSha1(Thread):
     def run(self):
         with open(self.path, 'rb') as f:
             sha = hashlib.sha1()
-            sha.update(f.read(1024 * 128))
-            blockhash = sha.hexdigest().upper()
-            f.seek(0, 0)
-            sha = hashlib.sha1()
             while True:
                 data = f.read(1024 * 128)
                 if not data:
                     break
                 sha.update(data)
             sha1 = sha.hexdigest().upper()
-        self.result = (blockhash, sha1)
+        self.result = sha1
 
     def get_result(self):
         return self.result
@@ -113,7 +109,7 @@ class Upload:
     # 檢查token是否失效
     async def checktoken(self, key=True):
         if key:
-            if self.upload115.user_id is None:
+            if self.upload115.user_id == '':
                 if 'key' not in self.task:
                     self.task['key'] = create_task(self.upload115.getuserkey())
                     self.task['key'].add_done_callback(lambda task: self.task.update({'token': None}))
@@ -144,15 +140,15 @@ class Upload:
             getsha1.start()
             while getsha1.is_alive():
                 await sleep(0.1)
-            blockhash, sha1 = getsha1.get_result()
+            sha1 = getsha1.get_result()
             with self.lock:
                 with setstate(self.state, uuid) as state:
-                    state.update({'sha1': sha1, 'blockhash': blockhash})
+                    state.update({'sha1': sha1})
         state = self.state[uuid]
         # 檢查是否已經秒傳過
         if self.state[uuid]['second'] is None:
             result = await self.upload115.upload_file_by_sha1(
-                state['blockhash'], state['sha1'], state['length'],
+                state['path'], state['sha1'], state['length'],
                 state['name'], state['cid']
             )
             # 檢查秒傳結果
@@ -176,7 +172,7 @@ class Upload:
             # 獲取uploadid
             if (upload_id := await self.upload115.get_upload_id(url, state['upload_key'])) is False:
                 return '獲取uploadid失敗'
-            # print(upload_id, state['name'])
+            print(upload_id, state['name'])
             with self.lock:
                 with setstate(self.state, uuid) as state:
                     state.update({'url': url, 'upload_id': upload_id, 'range': self.range(state['length'])})
@@ -290,8 +286,11 @@ class Upload:
             # 違規內容重新命名秒傳
             if result['status'] is False and result['statusmsg'] == '上传失败，含违规内容':
                 filename = uuid1().hex
-                result = await self.upload115.upload_file_by_sha1(state['blockhash'], state['sha1'],
-                                                                  state['length'], filename, state['cid'])
+                try:
+                    result = await self.upload115.upload_file_by_sha1(state['blockhash'], state['sha1'],
+                                                                      state['length'], filename, state['cid'])
+                except self.upload115.ErrInvalidEncodedData():
+                    return '數據驗證錯誤'
                 if result is False:
                     return '網路異常 上傳失敗'
                 if result['status'] == 2:

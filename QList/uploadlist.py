@@ -127,6 +127,7 @@ class Qupload(MQtext1):
             if state['stop'] and state['state'] is None:
                 self.get_rate(state['size'])
             elif not state['stop'] and state['state']:
+                self.sample_times, self.sample_values = [], []
                 self.setstate(state)
                 return
             await sleep(0.1)
@@ -153,6 +154,8 @@ class Qupload(MQtext1):
         delta_value = self.sample_values[-1] - self.sample_values[0]
         if delta_time:
             speed = delta_value / delta_time.total_seconds()
+            if speed < 0:
+                speed = 0
             try:
                 if self.progressBar.value() != (_size := int(size / self.length * 100)):
                     self.progressBar.setValue(_size)
@@ -191,7 +194,7 @@ class UploadList(MQList):
         # 添加資料夾任務
         self.folder_task = {}
         # 開始檢查循環
-        # create_task(self.stop())
+        create_task(self.stop())
 
     async def stop(self) -> None:
         while 1:
