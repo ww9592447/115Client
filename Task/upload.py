@@ -172,7 +172,6 @@ class Upload:
             # 獲取uploadid
             if (upload_id := await self.upload115.get_upload_id(url, state['upload_key'])) is False:
                 return '獲取uploadid失敗'
-            print(upload_id, state['name'])
             with self.lock:
                 with setstate(self.state, uuid) as state:
                     state.update({'url': url, 'upload_id': upload_id, 'range': self.range(state['length'])})

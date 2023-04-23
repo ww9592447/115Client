@@ -378,17 +378,17 @@ class MQList(QFrame):
     # 全部開始
     def allstop(self) -> None:
         for qtext in self.pauselist.copy():
-            qtext.set_restore.left_click.emit(qtext)
+            qtext.set_restore.leftclick.emit(qtext)
 
     # 全部暫停
     def allpause(self) -> None:
         for qtext in self.transmissionlist.copy() + self.queuelist.copy():
-            qtext.set_pause.left_click.emit(qtext)
+            qtext.set_pause.leftclick.emit(qtext)
 
     # 全部取消
     def allclose(self) -> None:
         for qtext in self.allqtext.copy():
-            qtext.set_closes.left_click.emit(qtext)
+            qtext.set_closes.leftclick.emit(qtext)
 
     # 設置目前傳輸大小
     def settransmissionsize(self, size: int) -> None:
@@ -555,16 +555,16 @@ class MyQLabel(QPushButton):
                    f'border-radius: 5px; font-size:{fontsize}px}}' \
                    'MyQLabel:hover{background-color: rgb(38, 110, 227)}'
         elif qss == 2:
-            _qss = 'QPushButton{background-color: rgb(225, 226, 226); color: rgb(0, 0, 0);'\
+            _qss = 'MyQLabel{background-color: rgb(225, 226, 226); color: rgb(0, 0, 0);'\
                    f'border:1px solid rgb(173, 173, 173);border-radius: 5px; font-size:{fontsize}px}}'\
-                   'QPushButton:hover:pressed{background-color: rgb(204, 228, 247);border-color: rgb(0, 85, 155)}'\
-                   'QPushButton:hover{background-color: rgb(229, 241, 251);border-color: rgb(0, 120, 215)}'
+                   'MyQLabel:hover:pressed{background-color: rgb(204, 228, 247);border-color: rgb(0, 85, 155)}'\
+                   'MyQLabel:hover{background-color: rgb(229, 241, 251);border-color: rgb(0, 120, 215)}'
         elif qss == 3:
-            _qss = 'QPushButton{background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);' \
+            _qss = 'MyQLabel{background-color: rgb(255, 255, 255); color: rgb(0, 0, 0);' \
                    f'border:1px solid rgb(173, 173, 173);border-radius: 5px; font-size:{fontsize}px}}' \
-                   'QPushButton:hover:pressed{background-color: rgb(204, 228, 247);border-color: rgb(0, 85, 155)}' \
-                   'QPushButton:hover{background-color: rgb(237, 246, 251);border-color: rgb(152, 217, 253)}' \
-                   'QPushButton:disabled{border-color: rgb(227, 227, 227);' \
+                   'MyQLabel:hover:pressed{background-color: rgb(204, 228, 247);border-color: rgb(0, 85, 155)}' \
+                   'MyQLabel:hover{background-color: rgb(237, 246, 251);border-color: rgb(152, 217, 253)}' \
+                   'MyQLabel:disabled{border-color: rgb(227, 227, 227);' \
                    'background-color: rgb(247, 247, 247); color: rgb(155, 155, 155)}'
 
         self.setStyleSheet(_qss)
