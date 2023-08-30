@@ -5,7 +5,7 @@
 ## 配置
 直接開啟 login_window.py or 115Client.exe 即可
 
-有多種方式 可以選擇 帳號登入 cookie登入 QrCode登入
+有多種登入方式 可以選擇 帳號登入 cookie登入 QrCode登入
 
 推薦使用帳號登入 這樣可以在cookie登入過期的時候可以不用再抓包就可以再次登入
 
