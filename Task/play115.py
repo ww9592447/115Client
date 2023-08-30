@@ -208,7 +208,7 @@ class FileObj:
             self.url = result['result']
             self.set_range()
         if self.wait_data and (self.task is None or self.task.done()):
-            self.task = gather(self.loop.create_task(self.download_run()), self.loop.create_task(self.download_run()))
+            self.task = self.loop.create_task(self.wait_download())
             self.task.add_done_callback(self.close)
         if run(self.get(offset, length)) is False:
             raise NTStatusEndOfFile()
