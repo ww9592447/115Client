@@ -1,29 +1,83 @@
-from urllib.parse import urlparse
+import json
+import struct
+import random
+import binascii
 import re
 import datetime
 import hmac
 import hashlib
 import time
 import base64
-import srequests
+import lz4.block
+import httpx
 import xml.etree.ElementTree as ElementTree
-from .directory import Directory
+from typing import TypedDict, Callable, NotRequired, BinaryIO
+from urllib.parse import urlparse, urlencode
+from asyncio import create_task, sleep, CancelledError
+from threading import Thread
+
 from Crypto.Cipher import AES
 from cryptography.hazmat.backends import default_backend
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.serialization import Encoding, PublicFormat
-import lz4.block
-import json
-import struct
-import random
-import binascii
-from urllib.parse import urlencode
+
+from .crc64 import Crc64Combine
+
+from Modules.type import Credential
+from Modules import srequests
+from Modules.Callback import Callback
+from Modules.type import PartInfo
+
+
+class PartResult(TypedDict):
+    state: bool
+    result: PartInfo | str
+
+
+class Sha1Data(TypedDict):
+    bucket: str
+    upload_key: str
+    cb: dict[str, str]
+
+
+class Result(TypedDict):
+    state: bool
+    result: str
+    sha1_data: NotRequired[Sha1Data]
+
+
+def get_slice_md5(bio: bytes) -> bytes:
+    md5 = hashlib.md5()
+    md5.update(bio)
+    return base64.b64encode(md5.digest())
+
+
+class GetSha1(Thread):
+    def __init__(self, path):
+        Thread.__init__(self)
+        self.path = path
+        self.result = None
+
+    def run(self):
+        with open(self.path, 'rb') as f:
+            sha = hashlib.sha1()
+            while True:
+                data = f.read(1024 * 128)
+                if not data:
+                    break
+                sha.update(data)
+            sha1 = sha.hexdigest().upper()
+        self.result = sha1
+
+    def get_result(self):
+        return self.result
 
 
 class ErrInvalidEncodedData(Exception):
-    def __init__(self):
-        super().__init__()
+    pass
 
+
+# 加密
 class Hash:
     @staticmethod
     def md5(data: str) -> str:
@@ -137,9 +191,9 @@ class Cipher:
         return plaintext
 
 
-class Upload115:
+class Upload:
     # 獲取 用戶 key
-    _api_key: str = 'http://proapi.115.com/app/uploadinfo'
+    _api_key: str = 'https://proapi.115.com/app/uploadinfo'
     # 獲取 上傳所需資料 url
     _api_info: str = 'https://uplb.115.com/3.0/getuploadinfo.php'
     # 獲取 秒傳 url
@@ -154,41 +208,52 @@ class Upload115:
     thread: int = 0
     # 鹽
     salt: str = 'Qclm8MGWUv59TnrR0XPg'
+    # 115版本
     app_version: str = '2.0.3.6'
+    # 標頭
     headers: dict[str, str] = {
         'Content-Type': 'application/x-www-form-urlencoded',
         'User-Agent': 'Mozilla/5.0; Windows NT/10.0.19045; 115Desktop/2.0.3.6',
         'cookie': ''
     }
-    token = {'time': 0}
+    # 115 上傳所需token
+    token: dict[str, any] = {'time': 0}
+
+    task = {}
+    # ecc 加密
     _ecc: Cipher = Cipher()
 
-    def __init__(self, config):
-        self.headers['cookie'] = config['設定'].get('cookie', raw=True)
-        self.directory = Directory(config)
-        self.thread = int(config['upload']['單文件上傳線程'])
+    def __init__(self, credential: Credential) -> None:
+        # 設置115標頭
+        self.headers = credential['headers']
 
-    async def getuserkey(self):
+    # 獲取 115 用戶id 用戶key
+    async def get_userkey(self) -> bool:
         result = await srequests.async_get(self._api_key, headers=self.headers)
         if result is False:
             return False
         result = result.json()
         self.user_id = str(result['user_id'])
         self.user_key = str(result['userkey']).upper()
+        return True
 
-    async def getinfo(self):
+    # 獲取 115 上傳所需資料
+    async def get_info(self) -> bool:
         body = await srequests.async_get(self._api_info, params={'t': int(time.time())}, headers=self.headers)
         if body is False:
             return False
         self.token.update(body.json())
+        return True
 
-    async def gettoken(self):
+    # 獲取 115 上傳所需資料
+    async def get_token(self) -> bool:
         _body = await srequests.async_get(self.token['gettokenurl'], params={'t': int(time.time())},
                                           headers=self.headers)
         if _body is False:
             return False
         self.token.update(_body.json())
         self.token['time'] = int(time.time())
+        return True
 
     def _calculate_token_v4(self, fileid: str, file_size: str, sign_key: str, sign_value: str, timestamp: int) -> str:
         return Hash.md5(
@@ -203,7 +268,16 @@ class Upload115:
         return Hash.sha1(sz_text.encode()).upper()
 
     # 使用sha1開始秒傳
-    async def upload_file_by_sha1(self, file_path, fileid, file_size, filename, cid) -> dict[str, str|int]:
+    async def upload_file_by_sha1(self, file_path: str, file_size: str, filename: str, cid: str) -> Result:
+        # 檢查token是否失效
+        if (result := await self.check_token()) is not None:
+            return Result(state=False, result=result)
+
+        get_sha1 = GetSha1(file_path)
+        get_sha1.start()
+        while get_sha1.is_alive():
+            await sleep(0.1)
+        fileid = get_sha1.get_result()
         target = f'U_1_{cid}'
         sign_key, sign_value = '', ''
         data = {
@@ -231,18 +305,40 @@ class Upload115:
                 })
 
             url = f'https://uplb.115.com/4.0/initupload.php?k_ec={self._ecc.encode_token(now)}'
+
             result = await srequests.async_post(
                 url, data=self._ecc.encode(urlencode(data).encode()), headers=self.headers
             )
+            if result is False:
+                return Result(state=False, result='網路異常 秒傳失敗')
             result = json.loads(self._ecc.decode(result.content))
             if result['status'] == 7:
                 sign_key = result['sign_key']
                 sign_value = Hash.sha1_file_range(file_path, result['sign_check'])
+            elif result['status'] == 8:
+                return Result(state=False, result='sig invalid')
+            elif result['status'] is False and result['statusmsg'] == '上传失败，含违规内容':
+                return Result(state=False, result='上傳失敗，含違規內容')
             else:
-                return result
+                # 秒傳成功
+                if result['status'] == 2:
+                    return Result(state=True, result='秒傳完成')
+                # 需要上傳
+                else:
+                    cb = {
+                        "x-oss-callback": base64.b64encode(result['callback']['callback'].encode()).decode(),
+                        "x-oss-callback-var": base64.b64encode(result['callback']['callback_var'].encode()).decode()
+                    }
+                    return Result(
+                        state=True,
+                        result='',
+                        sha1_data=Sha1Data(bucket=result['bucket'], upload_key=result['object'], cb=cb)
+                    )
 
-    def get_headers(self, method, key, headers, params=None):
-        def get_time():
+    def get_headers(
+            self, method: str, key: str, headers: dict[str, str], params: dict[str, str] | None = None
+    ) -> dict[str, str]:
+        def get_time() -> str:
             timeval = time.time()
             dt = datetime.datetime.fromtimestamp(timeval, datetime.timezone.utc)
             timetuple = dt.timetuple()
@@ -257,7 +353,8 @@ class Upload115:
 
         if params is not None:
             if 'partNumber' in params:
-                resource_bytes = f'/fhnfile/{key}?partNumber={params["partNumber"]}&uploadId={params["uploadId"]}'.encode()
+                resource_bytes = f'/fhnfile/{key}?partNumber={params["partNumber"]}' \
+                                 f'&uploadId={params["uploadId"]}'.encode()
             else:
                 resource_bytes = f'/fhnfile/{key}?uploadId={params["uploadId"]}'.encode()
         else:
@@ -281,38 +378,143 @@ class Upload115:
         return {'date': date, 'authorization': f"OSS {self.token['AccessKeyId'].strip()}:{signature}",
                 **headers}
 
-    async def get_upload_id(self, url, key):
+    async def get_upload_id(self, url: str, key: str) -> Result:
         headers = self.get_headers('POST', key, {'x-oss-security-token': self.token['SecurityToken']})
         result = await srequests.async_post(url, params={'uploads': ''}, headers=headers)
-        try:
-            ret = result.text
-            return re.search('<UploadId>(\S+)</UploadId>', ret)[1]
-        except:
-            return False
 
-    @staticmethod
-    def get_url(endpoint, bucket_name, key):
-        p = urlparse(endpoint)
+        if result:
+            ret = result.text
+            if upload_id := re.search(r'<UploadId>(\S+)</UploadId>', ret):
+                return Result(state=True, result=upload_id[1])
+        return Result(state=False, result='獲取upload_id失敗')
+
+    async def get_url(self, bucket: str, key: str) -> Result:
+        # 檢查token是否失效
+        if (result := await self.check_token(key=False)) is not None:
+            return Result(state=False, result=result)
+        p = urlparse(self.token['endpoint'])
         scheme = p.scheme
         netloc = p.netloc
-        return '{0}://{1}.{2}/{3}'.format(scheme, bucket_name, netloc, key)
+        return Result(state=True, result='{0}://{1}.{2}/{3}'.format(scheme, bucket, netloc, key))
 
-    async def combine(self, etag, url, key, upload_id, cb):
+    # 檢查token是否失效
+    async def check_token(self, key=True) -> str | None:
+        if key:
+            if self.user_id == '':
+                if 'key' not in self.task:
+                    self.task['key'] = create_task(self.get_userkey())
+                    self.task['key'].add_done_callback(lambda task: self.task.update({'token': None}))
+                if await self.task['key'] is False:
+                    return '獲取key失敗'
+        else:
+            if 'gettokenurl' not in self.token:
+                if 'info' not in self.task:
+                    self.task['info'] = create_task(self.get_info())
+                    self.task['info'].add_done_callback(lambda task: self.task.update({'info': None}))
+                if await self.task['info'] is False:
+                    return '獲取info失敗'
+
+            if time.time() - self.token['time'] >= 3000:
+                if 'token' not in self.task or self.task['token'] is None:
+                    self.task['token'] = create_task(self.get_token())
+                    self.task['token'].add_done_callback(lambda task: self.task.update({'token': None}))
+                if await self.task['token'] is False:
+                    return '獲取token失敗'
+
+    async def combine(
+            self,
+            url: str,
+            parts: dict[str, PartInfo],
+            upload_id: str,
+            upload_key: str,
+            cb: dict[str, str]
+    ) -> Result:
         root = ElementTree.Element('CompleteMultipartUpload')
-        for i in range(1, len(etag) + 1):
+        for i in range(1, len(parts) + 1):
             part_node = ElementTree.SubElement(root, "Part")
             ElementTree.SubElement(part_node, 'PartNumber').text = str(i)
-            ElementTree.SubElement(part_node, 'ETag').text = etag[str(i)]
+            ElementTree.SubElement(part_node, 'ETag').text = parts[str(i)].etag
         data = ElementTree.tostring(root, encoding='utf-8')
         params = {'uploadId': upload_id}
-        headers = self.get_headers('POST', key, {'x-oss-security-token': self.token['SecurityToken'], **cb},
+        headers = self.get_headers('POST', upload_key,
+                                   {'x-oss-security-token': self.token['SecurityToken'], **cb},
                                    params=params)
-        result = await srequests.async_post(url, params=params, data=data,
-                                            headers=self.get_headers('POST', f'{key}', headers, params=params))
+        result = await srequests.async_post(
+            url, params=params, data=data,
+            headers=self.get_headers('POST', upload_key, headers, params=params)
+        )
+
+        crc64 = Crc64Combine()
+        _parts = []
+        for index in range(1, len(parts) + 1):
+            _parts.append(parts[str(index)])
+        crc64ecma = crc64.calc_obj_crc_from_parts(_parts)
+
         if result is False:
-            return False
+            return Result(state=False, result='網路異常 合併失敗')
         try:
-            return result.json()
+            if result.headers['x-oss-hash-crc64ecma'] != crc64ecma:
+                return Result(state=False, result='crc64 驗證失敗')
+            result.json()
+            return Result(state=True, result='')
         except Exception as e:
+            print('------------------錯誤')
+            print(result.headers)
             print(result.text)
-            return False
+            return Result(state=False, result='合併失敗')
+            # raise '錯誤'
+
+    async def upload_part(
+            self,
+            file: BinaryIO,
+            callback: Callback,
+            url: str,
+            upload_key: str,
+            upload_id: str,
+            index: str,
+            offset: int,
+            length: int,
+            size_callback: Callable[[int], None] | None = None
+    ) -> PartResult:
+        # 檢查token是否失效
+        if (result := await self.check_token(key=False)) is not None:
+            return PartResult(state=False, result=result)
+        params = {'uploadId': upload_id, 'partNumber': index}
+        file.seek(offset)
+        bio = file.read(length)
+        md5 = get_slice_md5(bio)
+        for i in range(5):
+            _callback = callback(bio, callback=size_callback)
+            try:
+                async with httpx.AsyncClient() as client:
+                    headers = self.get_headers(
+                        'PUT', upload_key,
+                        {'x-oss-security-token': self.token['SecurityToken']},
+                        params=params
+                    )
+                    result = await client.put(url, params=params, data=_callback.async_read(),
+                                              headers=headers, timeout=30)
+                    result = result.headers
+                    if result['content-md5'] != md5.decode():
+                        print('md5不正確')
+                        raise
+                    part = PartInfo(
+                        index=index,
+                        crc64=result['x-oss-hash-crc64ecma'],
+                        etag=result['etag'],
+                        size=length
+                    )
+                    return PartResult(state=True, result=part)
+            except httpx.HTTPStatusError as exc:
+                print(f"Error response {exc.response.status_code} while requesting {exc.request.url!r}.")
+                _callback.delete()
+            except httpx.RequestError as exc:
+                print(f"An error occurred while requesting {exc.request.url!r}.")
+                _callback.delete()
+            except Exception as f:
+                print('錯誤', f, '---')
+            except CancelledError:
+                _callback.delete()
+                raise CancelledError
+        else:
+            return PartResult(state=False, result='上傳分片 失敗')

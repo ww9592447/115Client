@@ -1,4 +1,5 @@
-import requests, contextlib
+import requests
+import contextlib
 from io import BytesIO
 from uuid import uuid4
 
@@ -16,8 +17,8 @@ class Callback:
         self.all_size = 0
 
     def __call__(self, f, callback=None):
-        multipart = MultipartEncoder(f)
-        return MultipartEncoderMonitor(multipart, self, callback)
+        _multipart = MultipartEncoder(f)
+        return MultipartEncoderMonitor(_multipart, self, callback)
 
 
 class CustomBytesIO(BytesIO):
@@ -92,7 +93,7 @@ class MultipartEncoder:
 
         self._len = None
 
-        self.parts = [Part.from_field(i)for i in self._iter_fields()]
+        self.parts = [Part.from_field(i) for i in self._iter_fields()]
 
         self._iter_parts = iter(self.parts)
 
@@ -101,7 +102,7 @@ class MultipartEncoder:
     def _iter_fields(self):
         Content_Disposition = b'Content-Disposition: form-data'
         if isinstance(self.fields, dict):
-            for _name,_data in self.fields.items():
+            for _name, _data in self.fields.items():
                 if 'filename' in _data and 'data' in _data:
                     name = f'name="{_name}"'.encode()
                     filename = f'filename="{_data["filename"]}"'.encode()
@@ -185,9 +186,9 @@ class MultipartEncoderMonitor():
     def read(self, size=-1):
         try:
             string = self.encoder.read(size)
+            self.size.all_size += len(string)
+            self.bytes_read += len(string)
             if self.callback:
-                self.size.all_size += len(string)
-                self.bytes_read += len(string)
                 self.callback(self.size.all_size)
             return string
         except Exception as f:
@@ -197,9 +198,9 @@ class MultipartEncoderMonitor():
     async def async_read(self, size=8192):
         try:
             while (string := self.encoder.read(size)) != b'':
+                self.size.all_size += len(string)
+                self.bytes_read += len(string)
                 if self.callback:
-                    self.size.all_size += len(string)
-                    self.bytes_read += len(string)
                     self.callback(self.size.all_size)
                 yield string
         except Exception as f:

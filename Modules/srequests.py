@@ -27,11 +27,11 @@ def get(url, params=None, retry=2, **kwargs):
             stop += 1
 
 
-async def async_post(url, data=None, json=None, retry=2, **kwargs):
+async def async_post(url, data=None, json=None, retry=2, timeout=5, **kwargs):
     stop = 0
     while 1:
         try:
-            async with httpx.AsyncClient(proxies=proxies, verify=verify) as client:
+            async with httpx.AsyncClient(proxies=proxies, verify=verify, timeout=timeout) as client:
                 return await client.post(url, data=data, json=json, **kwargs)
         except Exception as f:
             if stop == retry:
@@ -39,11 +39,11 @@ async def async_post(url, data=None, json=None, retry=2, **kwargs):
             stop += 1
 
 
-async def async_get(url, params=None, retry=2, **kwargs):
+async def async_get(url, params=None, retry=2, timeout=5, **kwargs):
     stop = 0
     while 1:
         try:
-            async with httpx.AsyncClient(proxies=proxies, verify=verify) as client:
+            async with httpx.AsyncClient(proxies=proxies, verify=verify, timeout=timeout) as client:
                 return await client.get(url, params=params, **kwargs)
         except Exception as f:
             if stop == retry:

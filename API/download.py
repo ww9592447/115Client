@@ -1,9 +1,22 @@
 import time
 import math
 import base64
-from module import srequests
-from urllib.parse import quote
 import json
+import hashlib
+import httpx
+from urllib.parse import quote
+from typing import TypedDict, Callable, NotRequired
+from asyncio import CancelledError
+
+from Modules import srequests
+from Modules.type import Credential
+
+
+class Result(TypedDict):
+    state: bool
+    result: NotRequired[str]
+    data: NotRequired[bytearray]
+
 
 class MyRsa:
     def __init__(self):
@@ -15,16 +28,18 @@ class MyRsa:
         )
         self.e = int('10001', 16)
 
-    def a2hex(self, array):
-        hexstring = ''
+    @staticmethod
+    def a2hex(array: dict[int, int]) -> str:
+        hex_string = ''
         for i in range(len(array)):
-            nexthexbyte = hex(array[i])[2:]
-            if len(nexthexbyte) < 2:
-                nexthexbyte = f'0{nexthexbyte}'
-            hexstring += nexthexbyte
-        return hexstring
+            next_hex_byte = hex(array[i])[2:]
+            if len(next_hex_byte) < 2:
+                next_hex_byte = f'0{next_hex_byte}'
+            hex_string += next_hex_byte
+        return hex_string
 
-    def hex2a(self, _hex):
+    @staticmethod
+    def hex2a(_hex) -> str:
         text = ''
         for i in range(0, len(_hex), 2):
             text += chr(int(_hex[i:i + 2], 16))
@@ -42,7 +57,7 @@ class MyRsa:
         while n > 2:
             ba[(n := n - 1)] = 0xff
         ba[(n := n - 1)] = 2
-        ba[(n := n - 1)] = 0
+        ba[(n - 1)] = 0
         c = self.a2hex(ba)
         return int(c, 16)
 
@@ -76,26 +91,25 @@ class MyRsa:
         return d
 
 
-class Download115:
-    def __init__(self, config=None):
+class Download:
+    def __init__(self, credential: Credential) -> None:
+        # 設置115標頭
+        self.headers = credential['headers']
 
         self.rsa = MyRsa()
-        self.kts = [240, 229, 105, 174, 191, 220, 191, 138, 26, 69, 232, 190, 125, 166, 115, 184, 222, 143, 231, 196,
-                    69, 218, 134, 196, 155, 100, 139, 20, 106, 180, 241, 170, 56, 1, 53, 158, 38, 105, 44, 134, 0, 107,
-                    79, 165, 54, 52, 98, 166, 42, 150, 104, 24, 242, 74, 253, 189, 107, 151, 143, 77, 143, 137, 19, 183,
-                    108, 142, 147, 237, 14, 13, 72, 62, 215, 47, 136, 216, 254, 254, 126, 134, 80, 149, 79, 209, 235,
-                    131, 38, 52, 219, 102, 123, 156, 126, 157, 122, 129, 50, 234, 182, 51, 222, 58, 169, 89, 52, 102,
-                    59, 170, 186, 129, 96, 72, 185, 213, 129, 156, 248, 108, 132, 119, 255, 84, 120, 38, 95, 190, 232,
-                    30, 54, 159, 52, 128, 92, 69, 44, 155, 118, 213, 27, 143, 204, 195, 184, 245]
+        self.kts = [
+            240, 229, 105, 174, 191, 220, 191, 138, 26, 69, 232, 190, 125, 166, 115, 184, 222, 143, 231, 196,
+            69, 218, 134, 196, 155, 100, 139, 20, 106, 180, 241, 170, 56, 1, 53, 158, 38, 105, 44, 134, 0, 107,
+            79, 165, 54, 52, 98, 166, 42, 150, 104, 24, 242, 74, 253, 189, 107, 151, 143, 77, 143, 137, 19, 183,
+            108, 142, 147, 237, 14, 13, 72, 62, 215, 47, 136, 216, 254, 254, 126, 134, 80, 149, 79, 209, 235,
+            131, 38, 52, 219, 102, 123, 156, 126, 157, 122, 129, 50, 234, 182, 51, 222, 58, 169, 89, 52, 102,
+            59, 170, 186, 129, 96, 72, 185, 213, 129, 156, 248, 108, 132, 119, 255, 84, 120, 38, 95, 190, 232,
+            30, 54, 159, 52, 128, 92, 69, 44, 155, 118, 213, 27, 143, 204, 195, 184, 245
+        ]
 
         self.keyS = [0x29, 0x23, 0x21, 0x5E]
         self.keyL = [120, 6, 173, 76, 51, 134, 93, 24, 76, 1, 63, 70]
-        if config:
-            self.headers = {
-                    'Content-Type': 'application/x-www-form-urlencoded',
-                    'Cookie': config['設定'].get('cookie', raw=True),
-                    "User-Agent": 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36'
-                }
+
         self.downurl = 'http://proapi.115.com/app/chrome/downurl?t={}'
 
     def xor115Enc(self, src, srclen, key, keylen):
@@ -186,30 +200,54 @@ class Download115:
         tmp = self.asymDecode(tmp, len(tmp))
         return self.bytesToString(self.symDecode(tmp[16:], len(tmp) - 16, key, tmp[0:16]))
 
-    def md5(self, str):
-        str = str.encode('utf-8')
-        import hashlib
+    @staticmethod
+    def md5(string) -> str:
+        string = string.encode('utf-8')
         m = hashlib.md5()
-        m.update(str)
+        m.update(string)
         return m.hexdigest()
 
-    async def CreateDownloadTask(self, pc):
-        # start = time.time()
+    async def get_url(self, pc: str) -> Result:
         tmus = int(time.time())
         tm = math.floor(tmus)
         data, key = self.encode(f'{{"pickcode":"{pc}"}}', tm)
         data = quote(data, safe='...')
         data = f'data={data}'
-        # _start = time.time() - start
         ret = await srequests.async_post(self.downurl.format(tm), data=data, headers=self.headers, timeout=5, retry=5)
-        # start = time.time()
         try:
             if ret:
-                c = json.loads(self.decode(ret.json()['data'], key))
-                end = time.time()
-                # print(_start + (end - start))
-                return c
-            return False
+                result = json.loads(self.decode(ret.json()['data'], key))
+                return Result(state=True, result=result[list(result)[0]]['url']['url'])
+            return Result(state=False, result='')
         except:
-            return False
-            # raise
+            return Result(state=False, result='')
+
+    async def download_part(
+            self,
+            file_size: int,
+            url: str,
+            offset: int,
+            length: int,
+            size_callback: Callable[[int], None] | None = None
+    ) -> Result:
+        _offset = offset
+        _data = bytearray()
+        for stop in range(5):
+            try:
+                async with httpx.AsyncClient() as client:
+                    headers = {**{'Range': 'bytes=%d-%d' % (_offset, length)}, **self.headers}
+                    async with client.stream('GET', url, headers=headers, timeout=5) as response:
+                        async for data in response.aiter_bytes():
+                            _data += data
+                            _size = len(data)
+                            _offset += _size
+                            if size_callback:
+                                size_callback(_size)
+                if _offset == file_size or _offset - 1 == length:
+                    return Result(state=True, data=_data)
+            except CancelledError:
+                raise CancelledError
+            except httpx.RequestError:
+                pass
+        else:
+            return Result(state=False, result='網路異常下載失敗')
