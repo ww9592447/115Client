@@ -319,21 +319,20 @@ class Upload:
                 return Result(state=False, result='sig invalid')
             elif result['status'] is False and result['statusmsg'] == '上传失败，含违规内容':
                 return Result(state=False, result='上傳失敗，含違規內容')
-            else:
-                # 秒傳成功
-                if result['status'] == 2:
-                    return Result(state=True, result='秒傳完成')
-                # 需要上傳
-                else:
-                    cb = {
-                        "x-oss-callback": base64.b64encode(result['callback']['callback'].encode()).decode(),
-                        "x-oss-callback-var": base64.b64encode(result['callback']['callback_var'].encode()).decode()
-                    }
-                    return Result(
-                        state=True,
-                        result='',
-                        sha1_data=Sha1Data(bucket=result['bucket'], upload_key=result['object'], cb=cb)
-                    )
+            # 秒傳成功
+            elif result['status'] == 2:
+                return Result(state=True, result='秒傳完成')
+            # 需要上傳
+            elif result['status'] == 1:
+                cb = {
+                    "x-oss-callback": base64.b64encode(result['callback']['callback'].encode()).decode(),
+                    "x-oss-callback-var": base64.b64encode(result['callback']['callback_var'].encode()).decode()
+                }
+                return Result(
+                    state=True,
+                    result='',
+                    sha1_data=Sha1Data(bucket=result['bucket'], upload_key=result['object'], cb=cb)
+                )
 
     def get_headers(
             self, method: str, key: str, headers: dict[str, str], params: dict[str, str] | None = None
@@ -460,6 +459,7 @@ class Upload:
         except Exception as e:
             print('------------------錯誤')
             print(result.headers)
+            print('-------------------------')
             print(result.text)
             return Result(state=False, result='合併失敗')
             # raise '錯誤'
@@ -505,14 +505,8 @@ class Upload:
                         size=length
                     )
                     return PartResult(state=True, result=part)
-            except httpx.HTTPStatusError as exc:
-                print(f"Error response {exc.response.status_code} while requesting {exc.request.url!r}.")
+            except httpx.RequestError:
                 _callback.delete()
-            except httpx.RequestError as exc:
-                print(f"An error occurred while requesting {exc.request.url!r}.")
-                _callback.delete()
-            except Exception as f:
-                print('錯誤', f, '---')
             except CancelledError:
                 _callback.delete()
                 raise CancelledError

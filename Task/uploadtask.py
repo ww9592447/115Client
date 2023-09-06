@@ -135,6 +135,7 @@ class UploadTask:
                 state.update({'start': False, 'state': StateData.COMPLETE, 'result': '上傳完成'})
         elif result['state'] is False:
             with SetData(self.state, uuid, self.lock) as state:
+                print(state)
                 state.update({'start': False, 'state': StateData.ERROR, 'result': result['result']})
 
     async def upload_all_part(self, uuid: str, callback: Callback, all_index: list[str, ...]) -> None:

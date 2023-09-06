@@ -391,21 +391,22 @@ if __name__ == '__main__':
         download_path=config_data['Download']['下載路徑'],
         download_sha1=config_data['Download'].getboolean('Download_sha1'),
         upload_max=config_data['Upload'].getint('最大同時上傳數'),
-        upload_thread_max=config_data['Upload'].getint('rpc最大同時下載數'),
+        upload_thread_max=config_data['Upload'].getint('單文件上傳線程'),
         aria2_rpc_max=config_data['Aria2-rpc'].getint('rpc最大同時下載數'),
         aria2_rpc_url=config_data['Aria2-rpc']['rpc_url'],
         aria2_sha1=config_data['Aria2-rpc'].getboolean('aria2_sha1'),
 
     )
+    _cookie = f"USERSESSIONID={config_data['帳號']['usersessionid']};" \
+              f"UID={config_data['帳號']['uid']};" \
+              f"CID={config_data['帳號']['cid']};" \
+              f"SEID={config_data['帳號']['seid']}"
     # 設置 115 用戶資料
     credential: Credential = Credential(
         headers={
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Cookie': ';'.join(
-                ['='.join((data[0].upper(), data[1] if data[1] != '' else '0'))
-                 for data in config_data['帳號'].items()]
-            ),
-            'User-Agent': 'Mozilla/5.0  115disk/11.2.0'
+            'Cookie': _cookie,
+            'User-Agent': 'Mozilla/5.0; Windows NT/10.0.19045; 115Desktop/2.0.3.6'
         },
         user_id=_user_id[1] if (_user_id := re.search(r'(\d+)_', config_data['帳號']['UID'])) else ''
     )

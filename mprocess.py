@@ -86,7 +86,6 @@ class MultiProgress:
         self.download_task: DownloadTask = DownloadTask(self.download, state, lock, config)
         # 設置目錄API
         self.directory: Directory = directory
-
         self.upload_task: UploadTask = UploadTask(self.upload, state, lock, self.directory, config)
 
         self.my_font_metrics = MyQFontMetrics(font_size, self.state, self.lock)
